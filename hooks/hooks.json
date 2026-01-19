@@ -1,0 +1,15 @@
+{
+  "description": "Phil-Connors plugin stop hook for persistent context loops with three-tier skill injection",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/stop-hook.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
