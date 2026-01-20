@@ -11,6 +11,7 @@ MAX_ITERATIONS=20
 COMPLETION_PROMISE="null"
 TASK_ID=""
 SUMMARIZATION_THRESHOLD=10
+SKILLS_CONFIG=""
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -29,6 +30,7 @@ OPTIONS:
   --max-iterations <n>           Max iterations (default: 20)
   --task-id '<id>'              Custom task identifier (default: auto-generated)
   --summarize-after <n>         Summarize learnings after N entries (default: 10)
+  --skills-config '<text>'      Initial content for .agent/skills-lock.md (overrides template)
   -h, --help                    Show this help
 
 DESCRIPTION:
@@ -77,6 +79,11 @@ HELP_EOF
       SUMMARIZATION_THRESHOLD="$2"
       shift 2
       ;;
+    --skills-config)
+      [[ -z "${2:-}" ]] && { echo "Error: --skills-config requires text" >&2; exit 1; }
+      SKILLS_CONFIG="$2"
+      shift 2
+      ;;
     *)
       PROMPT_PARTS+=("$1")
       shift
@@ -97,8 +104,15 @@ fi
 # Create directory structure
 mkdir -p ".agent/phil-connors/tasks/$TASK_ID/learned"
 
-# Create skills-lock.md template if it doesn't exist
-if [[ ! -f ".agent/skills-lock.md" ]]; then
+# Create or update skills-lock.md
+if [[ -n "$SKILLS_CONFIG" ]]; then
+  # User provided skills config - use it (even if file exists)
+  mkdir -p ".agent"
+  echo "$SKILLS_CONFIG" > ".agent/skills-lock.md"
+  echo "Created .agent/skills-lock.md from --skills-config"
+elif [[ ! -f ".agent/skills-lock.md" ]]; then
+  # No file exists and no config provided - create template
+  mkdir -p ".agent"
   cat > ".agent/skills-lock.md" << 'SKILLS_EOF'
 # Global Skills (Tier 1 - IMMUTABLE)
 

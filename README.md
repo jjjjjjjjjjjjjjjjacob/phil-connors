@@ -46,20 +46,28 @@ Unlike Wiggum which loses context between iterations (only passing back the orig
 - `--max-iterations <n>` - Max iterations (default: 20)
 - `--task-id '<id>'` - Custom task identifier
 - `--summarize-after <n>` - Summarize after N learnings (default: 10)
+- `--skills-config '<text>'` - Initial content for `.agent/skills-lock.md` (overrides template)
 
 ## Example Session
 
 ```bash
-# Start a loop
-/phil-connors "Refactor auth to JWT" --completion-promise "All tests passing" --max-iterations 15
+# Start a loop with custom skills config
+/phil-connors "Refactor auth to JWT" --completion-promise "All tests passing" --max-iterations 15 --skills-config "
+## Project Rules
+- Use TypeScript strict mode
+- All auth code in src/auth/
+- Never commit .env files
+"
 
-# During iteration, record discoveries
+# During iteration, RECORD LEARNINGS (critical!)
 /phil-connors-learn "JWT library requires async operations"
 /phil-connors-learn "Token expiry must be checked before validation"
 
-# When truly complete, output:
+# When truly complete, you MUST output with promise tags:
 <promise>All tests passing</promise>
 ```
+
+**IMPORTANT**: Always use `/phil-connors-learn` to record discoveries. Learnings persist across context resets - without them, you'll rediscover the same things repeatedly.
 
 ## File Structure Created
 

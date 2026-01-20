@@ -145,7 +145,43 @@ if [[ $MAX_ITERATIONS -gt 0 ]]; then
   ITER_INFO="$ITER_INFO of $MAX_ITERATIONS"
 fi
 
-SYSTEM_MSG="=== PHIL-CONNORS ITERATION $NEXT_ITERATION ===
+SYSTEM_MSG="================================================================================
+>>> HOW TO COMPLETE THIS LOOP - READ THIS FIRST <<<
+================================================================================
+When the task is TRULY complete, you MUST output EXACTLY this text:
+
+<promise>$COMPLETION_PROMISE</promise>
+
+CRITICAL:
+- The <promise> tags are REQUIRED - without them, the loop continues forever
+- The text inside must match EXACTLY: $COMPLETION_PROMISE
+- Only output this when the statement is genuinely TRUE
+- Do NOT just say \"done\" or \"complete\" - you MUST use the <promise> tags
+
+================================================================================
+>>> RECORD LEARNINGS - THIS IS IMPORTANT <<<
+================================================================================
+After EACH significant discovery or insight, you MUST run:
+
+/phil-connors-learn \"your insight here\"
+
+What to record:
+- Discoveries about the codebase structure or patterns
+- Solutions that worked (or didn't work)
+- Important file locations or dependencies found
+- Constraints or requirements discovered during iteration
+- Anti-patterns to avoid
+
+WHY: Learnings persist across context resets. Without them, you will
+rediscover the same things repeatedly. Record insights as you find them!
+
+================================================================================
+
+=== PHIL-CONNORS ITERATION $NEXT_ITERATION ===
+
+$ITER_INFO
+Task ID: $TASK_ID
+Learnings recorded: $LEARNING_COUNT
 
 ================================================================================
 TIER 1: GLOBAL SKILLS (IMMUTABLE - ALWAYS APPLY THESE)
@@ -161,16 +197,6 @@ $TASK_CONTEXT
 TIER 3: ACCUMULATED LEARNINGS
 ================================================================================
 $LEARNINGS
-
-================================================================================
-LOOP STATUS
-================================================================================
-$ITER_INFO
-Task ID: $TASK_ID
-Learnings recorded: $LEARNING_COUNT
-
-To complete: Output <promise>$COMPLETION_PROMISE</promise> (ONLY when TRUE)
-To add learning: Use /phil-connors-learn \"insight\"
 
 ================================================================================
 ORIGINAL PROMPT

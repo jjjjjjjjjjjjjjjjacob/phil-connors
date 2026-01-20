@@ -1,6 +1,6 @@
 ---
 description: "Start phil-connors loop with persistent context"
-argument-hint: "PROMPT --completion-promise TEXT [--max-iterations N]"
+argument-hint: "PROMPT --completion-promise TEXT [--max-iterations N] [--skills-config TEXT]"
 allowed-tools: ["Bash"]
 ---
 
@@ -41,6 +41,31 @@ The stop hook reads and injects all skills. Review the systemMessage for:
 ## Adding Learnings
 
 Use `/phil-connors-learn "insight"` to record discoveries during iteration.
+
+Learnings are CRITICAL - they persist across context resets. Record:
+- Codebase structure discoveries
+- Solutions that worked (or didn't)
+- Important file locations
+- Constraints or requirements found
+
+## Options
+
+- `--completion-promise '<text>'` - Required. Text that signals task completion
+- `--max-iterations <n>` - Max iterations before auto-stop (default: 20)
+- `--skills-config '<text>'` - Initial content for .agent/skills-lock.md (overrides template)
+- `--task-id '<id>'` - Custom task identifier
+- `--summarize-after <n>` - Auto-summarize learnings after N entries (default: 10)
+
+## Example with Skills Config
+
+```
+/phil-connors "Fix auth bugs" --completion-promise "All auth tests pass" --skills-config "
+## Project Rules
+- Use TypeScript strict mode
+- All functions need tests
+- Auth code is in src/auth/
+"
+```
 
 ## Completion
 
