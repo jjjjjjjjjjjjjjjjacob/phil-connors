@@ -1,7 +1,6 @@
 ---
 description: "Cancel active phil-connors loop"
 allowed-tools: ["Bash", "Read"]
-hide-from-slash-command-tool: "true"
 ---
 
 # Cancel Phil-Connors

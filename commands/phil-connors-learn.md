@@ -2,7 +2,6 @@
 description: "Add a learning during phil-connors iteration"
 argument-hint: "\"insight or discovery\""
 allowed-tools: ["Bash"]
-hide-from-slash-command-tool: "true"
 ---
 
 # Phil-Connors Learn

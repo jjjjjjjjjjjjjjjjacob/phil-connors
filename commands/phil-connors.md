@@ -2,7 +2,6 @@
 description: "Start phil-connors loop with persistent context"
 argument-hint: "PROMPT --completion-promise TEXT [--max-iterations N]"
 allowed-tools: ["Bash"]
-hide-from-slash-command-tool: "true"
 ---
 
 # Phil-Connors Loop Command
