@@ -39,6 +39,7 @@ Unlike Wiggum which loses context between iterations (only passing back the orig
 |---------|-------------|
 | `/phil-connors "PROMPT" [OPTIONS]` | Start a loop with persistent context |
 | `/phil-connors-learn [OPTIONS] "insight"` | Add a categorized learning during iteration |
+| `/phil-connors-context-update [OPTIONS]` | Update task context (priority files, constraints, criteria) |
 | `/phil-connors-pause` | Pause loop (state preserved for resume) |
 | `/phil-connors-resume [TASK_ID]` | Resume a paused task |
 | `/phil-connors-list` | List all tasks with status |
@@ -89,6 +90,9 @@ The `/phil-connors-learn` command supports categorization for better organizatio
 | `--category <cat>` | `-c` | Category: discovery, pattern, anti-pattern, file-location, constraint, solution, blocker |
 | `--importance <lvl>` | `-i` | Importance: low, medium, high, critical |
 | `--file <path>` | `-f` | Related file path (can specify multiple) |
+| `--update <id>` | `-u` | Update an existing learning by ID |
+| `--deprecate <id>` | `-d` | Mark learning as deprecated (excluded from summaries) |
+| `--list` | `-l` | List all learnings with IDs and status |
 
 **Categories explained:**
 - `discovery` - General findings about the codebase (default)
@@ -99,9 +103,45 @@ The `/phil-connors-learn` command supports categorization for better organizatio
 - `solution` - Solutions that worked
 - `blocker` - Issues blocking progress
 
+**Learning lifecycle management:**
+```bash
+# List all learnings to see their IDs
+/phil-connors-learn --list
+
+# Update an existing learning (change importance/category)
+/phil-connors-learn --update 3 -i critical "This is now critical"
+
+# Mark a learning as deprecated (no longer relevant)
+/phil-connors-learn --deprecate 2
+```
+
 **When summarization triggers**, learnings are auto-organized by:
 1. Critical/high importance items first (always apply these)
 2. Then grouped by category for easy lookup
+3. Deprecated learnings are excluded from summaries
+
+### Updating Task Context
+
+Use `/phil-connors-context-update` to evolve task context as requirements emerge:
+
+```bash
+# Add priority files discovered during work
+/phil-connors-context-update --priority-file src/auth/jwt.ts
+
+# Add constraints discovered during iteration
+/phil-connors-context-update --constraint "Must maintain v2 API compatibility"
+
+# Add success criteria as scope becomes clearer
+/phil-connors-context-update --success-criterion "All auth tests pass"
+
+# Combine multiple updates
+/phil-connors-context-update -p src/auth.ts -c "No external deps" -s "Tests pass"
+```
+
+**Why use context updates instead of learnings?**
+- Task context (Tier 2) is always visible in every iteration
+- Learnings (Tier 3) may be summarized/archived
+- Use context for things that must ALWAYS be visible
 
 ## Task Chaining (Continuations)
 
@@ -154,11 +194,12 @@ Pause a loop to continue later in a new session:
     ├── state.md                       # Loop state
     └── tasks/
         └── {task-id}/
-            ├── context.md             # Tier 2: Task context
-            └── learned/
-                ├── 001.md             # Individual learnings
-                ├── 002.md
-                └── _summary.md        # Auto-generated summary
+            ├── context.md             # Tier 2: Task context (editable via context-update)
+            ├── learned/
+            │   ├── 001.md             # Individual learnings
+            │   ├── 002.md
+            │   └── _summary.md        # Auto-generated summary
+            └── learned-archive/       # Archived learnings (optional)
 ```
 
 ## How It Works

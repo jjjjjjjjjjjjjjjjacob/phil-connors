@@ -71,55 +71,69 @@ if [[ -f "$TRANSCRIPT_PATH" ]]; then
   fi
 fi
 
-# === MIN_CONTINUATIONS: Force continuation if below minimum ===
-if [[ "$MIN_CONTINUATIONS" =~ ^[0-9]+$ ]] && [[ "$CONTINUATION_COUNT" =~ ^[0-9]+$ ]] && \
-   [[ $MIN_CONTINUATIONS -gt 0 ]] && [[ $CONTINUATION_COUNT -lt $MIN_CONTINUATIONS ]] && \
-   [[ -n "$CONTINUATION_PROMPT" ]]; then
-  # Force continuation - haven't reached minimum yet
-  NEXT_CONTINUATION=$((CONTINUATION_COUNT + 1))
-  echo "Phil-Connors: Forcing continuation $NEXT_CONTINUATION (min: $MIN_CONTINUATIONS)"
+# === CHECK FOR COMPLETION PROMISE ===
+# Continuation only triggers AFTER a completion promise is detected
+PROMISE_DETECTED=false
+PROMISE_TEXT=""
 
-  TEMP_FILE="${STATE_FILE}.tmp.$$"
-  sed "s/^iteration: .*/iteration: 1/" "$STATE_FILE" | \
-    sed "s/^continuation_count: .*/continuation_count: $NEXT_CONTINUATION/" | \
-    sed "s/^last_iteration_at: .*/last_iteration_at: \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"/" > "$TEMP_FILE"
-  mv "$TEMP_FILE" "$STATE_FILE"
-
-  CONTINUING=true
-  NEXT_ITERATION=1
-else
-  # Check completion promise (normal flow)
-  if [[ "$COMPLETION_PROMISE" != "null" ]] && [[ -n "$COMPLETION_PROMISE" ]] && [[ -n "$LAST_OUTPUT" ]]; then
-    PROMISE_TEXT=$(echo "$LAST_OUTPUT" | perl -0777 -pe 's/.*?<promise>(.*?)<\/promise>.*/$1/s; s/^\s+|\s+$//g; s/\s+/ /g' 2>/dev/null || echo "")
-
-    if [[ -n "$PROMISE_TEXT" ]] && [[ "$PROMISE_TEXT" = "$COMPLETION_PROMISE" ]]; then
-      # Check if continuations are available
-      if [[ "$MAX_CONTINUATIONS" =~ ^[0-9]+$ ]] && [[ "$CONTINUATION_COUNT" =~ ^[0-9]+$ ]] && \
-         [[ $MAX_CONTINUATIONS -gt 0 ]] && [[ $CONTINUATION_COUNT -lt $MAX_CONTINUATIONS ]] && \
-         [[ -n "$CONTINUATION_PROMPT" ]]; then
-        # Continuation mode: reset iteration, increment continuation count
-        NEXT_CONTINUATION=$((CONTINUATION_COUNT + 1))
-        echo "Phil-Connors: Task completed. Starting continuation $NEXT_CONTINUATION of $MAX_CONTINUATIONS"
-
-        # Update state file: reset iteration to 1, increment continuation_count
-        TEMP_FILE="${STATE_FILE}.tmp.$$"
-        sed "s/^iteration: .*/iteration: 1/" "$STATE_FILE" | \
-          sed "s/^continuation_count: .*/continuation_count: $NEXT_CONTINUATION/" | \
-          sed "s/^last_iteration_at: .*/last_iteration_at: \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"/" > "$TEMP_FILE"
-        mv "$TEMP_FILE" "$STATE_FILE"
-
-        CONTINUING=true
-        NEXT_ITERATION=1
-      else
-        # No continuations left - end loop normally
-        echo "Phil-Connors loop: Detected <promise>$COMPLETION_PROMISE</promise>"
-        sed -i.bak 's/^active: true/active: false/' "$STATE_FILE" 2>/dev/null || \
-          sed -i '' 's/^active: true/active: false/' "$STATE_FILE" 2>/dev/null || true
-        exit 0
-      fi
-    fi
+if [[ "$COMPLETION_PROMISE" != "null" ]] && [[ -n "$COMPLETION_PROMISE" ]] && [[ -n "$LAST_OUTPUT" ]]; then
+  PROMISE_TEXT=$(echo "$LAST_OUTPUT" | perl -0777 -pe 's/.*?<promise>(.*?)<\/promise>.*/$1/s; s/^\s+|\s+$//g; s/\s+/ /g' 2>/dev/null || echo "")
+  if [[ -n "$PROMISE_TEXT" ]] && [[ "$PROMISE_TEXT" = "$COMPLETION_PROMISE" ]]; then
+    PROMISE_DETECTED=true
   fi
 fi
+
+if [[ "$PROMISE_DETECTED" == "true" ]]; then
+  # Completion promise detected - check if continuation should happen
+  # Continuation triggers if: continuation_prompt is set AND
+  #   (below min_continuations OR (max_continuations > 0 AND below max_continuations))
+  SHOULD_CONTINUE=false
+
+  if [[ -n "$CONTINUATION_PROMPT" ]] && [[ "$CONTINUATION_COUNT" =~ ^[0-9]+$ ]]; then
+    # Check min_continuations (guarantees at least N continuations)
+    if [[ "$MIN_CONTINUATIONS" =~ ^[0-9]+$ ]] && [[ $MIN_CONTINUATIONS -gt 0 ]] && \
+       [[ $CONTINUATION_COUNT -lt $MIN_CONTINUATIONS ]]; then
+      SHOULD_CONTINUE=true
+    fi
+
+    # Check max_continuations (allows up to N continuations if set)
+    if [[ "$MAX_CONTINUATIONS" =~ ^[0-9]+$ ]] && [[ $MAX_CONTINUATIONS -gt 0 ]] && \
+       [[ $CONTINUATION_COUNT -lt $MAX_CONTINUATIONS ]]; then
+      SHOULD_CONTINUE=true
+    fi
+  fi
+
+  if [[ "$SHOULD_CONTINUE" == "true" ]]; then
+    # Continuation mode: reset iteration, increment continuation count
+    NEXT_CONTINUATION=$((CONTINUATION_COUNT + 1))
+
+    # Build appropriate message
+    if [[ $MIN_CONTINUATIONS -gt 0 ]] && [[ $MAX_CONTINUATIONS -gt 0 ]]; then
+      echo "Phil-Connors: Task completed. Starting continuation $NEXT_CONTINUATION (min: $MIN_CONTINUATIONS, max: $MAX_CONTINUATIONS)"
+    elif [[ $MIN_CONTINUATIONS -gt 0 ]]; then
+      echo "Phil-Connors: Task completed. Starting continuation $NEXT_CONTINUATION (min: $MIN_CONTINUATIONS)"
+    else
+      echo "Phil-Connors: Task completed. Starting continuation $NEXT_CONTINUATION of $MAX_CONTINUATIONS"
+    fi
+
+    # Update state file: reset iteration to 1, increment continuation_count
+    TEMP_FILE="${STATE_FILE}.tmp.$$"
+    sed "s/^iteration: .*/iteration: 1/" "$STATE_FILE" | \
+      sed "s/^continuation_count: .*/continuation_count: $NEXT_CONTINUATION/" | \
+      sed "s/^last_iteration_at: .*/last_iteration_at: \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"/" > "$TEMP_FILE"
+    mv "$TEMP_FILE" "$STATE_FILE"
+
+    CONTINUING=true
+    NEXT_ITERATION=1
+  else
+    # No continuations left or not configured - end loop normally
+    echo "Phil-Connors loop: Detected <promise>$COMPLETION_PROMISE</promise>"
+    sed -i.bak 's/^active: true/active: false/' "$STATE_FILE" 2>/dev/null || \
+      sed -i '' 's/^active: true/active: false/' "$STATE_FILE" 2>/dev/null || true
+    exit 0
+  fi
+fi
+# If no promise detected, continue normal iteration (handled below)
 
 # === AUTO-SUMMARIZATION CHECK ===
 if [[ "$LEARNING_COUNT" =~ ^[0-9]+$ ]] && [[ "$SUMMARIZATION_THRESHOLD" =~ ^[0-9]+$ ]]; then
@@ -234,8 +248,17 @@ fi
 # Build continuation header if in continuation mode
 CONTINUATION_HEADER=""
 if [[ "$CONTINUING" == "true" ]]; then
+  # Build header line based on what's configured
+  if [[ $MIN_CONTINUATIONS -gt 0 ]] && [[ $MAX_CONTINUATIONS -gt 0 ]]; then
+    CONT_HEADER_LINE=">>> CONTINUATION $NEXT_CONTINUATION (min: $MIN_CONTINUATIONS, max: $MAX_CONTINUATIONS) <<<"
+  elif [[ $MIN_CONTINUATIONS -gt 0 ]]; then
+    CONT_HEADER_LINE=">>> CONTINUATION $NEXT_CONTINUATION (min: $MIN_CONTINUATIONS) <<<"
+  else
+    CONT_HEADER_LINE=">>> CONTINUATION $NEXT_CONTINUATION of $MAX_CONTINUATIONS <<<"
+  fi
+
   CONTINUATION_HEADER="================================================================================
->>> CONTINUATION $NEXT_CONTINUATION of $MAX_CONTINUATIONS <<<
+$CONT_HEADER_LINE
 ================================================================================
 PREVIOUS TASK COMPLETED! Now respond to this continuation prompt:
 

@@ -4,10 +4,16 @@
 # Creates a condensed summary of accumulated learnings organized by category
 # Called by stop-hook when learning_count >= summarization_threshold
 # Compatible with bash 3.x (macOS default)
+#
+# Features:
+# - Skips deprecated learnings (deprecated: true in frontmatter)
+# - Optionally archives learnings after summarization (--archive flag)
+# - Organizes by importance (critical/high first) and category
 
 set -euo pipefail
 
 TASK_ID="${1:-}"
+ARCHIVE_MODE="${2:-}"
 
 if [[ -z "$TASK_ID" ]]; then
   echo "Error: Task ID required" >&2
@@ -15,6 +21,7 @@ if [[ -z "$TASK_ID" ]]; then
 fi
 
 LEARNED_DIR=".agent/phil-connors/tasks/$TASK_ID/learned"
+ARCHIVE_DIR=".agent/phil-connors/tasks/$TASK_ID/learned-archive"
 SUMMARY_FILE="$LEARNED_DIR/_summary.md"
 STATE_FILE=".agent/phil-connors/state.md"
 
@@ -22,7 +29,7 @@ if [[ ! -d "$LEARNED_DIR" ]]; then
   exit 0
 fi
 
-# Get all learning files (excluding summary)
+# Get all learning files (excluding summary and archived)
 LEARNING_FILES=$(ls -1 "$LEARNED_DIR"/*.md 2>/dev/null | grep -v '_summary.md' | sort || echo "")
 
 if [[ -z "$LEARNING_FILES" ]]; then
@@ -59,8 +66,11 @@ echo "0" > "$TEMP_DIR/critical.count"
 echo "0" > "$TEMP_DIR/high.count"
 
 LEARNING_IDS=""
+DEPRECATED_IDS=""
 TOTAL_CRITICAL=0
 TOTAL_HIGH=0
+TOTAL_DEPRECATED=0
+ACTIVE_COUNT=0
 
 while IFS= read -r file; do
   if [[ -f "$file" ]]; then
@@ -73,6 +83,20 @@ while IFS= read -r file; do
     fi
 
     CONTENT=$(cat "$file")
+
+    # Check if deprecated
+    IS_DEPRECATED=$(echo "$CONTENT" | grep '^deprecated: true' || echo "")
+    if [[ -n "$IS_DEPRECATED" ]]; then
+      TOTAL_DEPRECATED=$((TOTAL_DEPRECATED + 1))
+      if [[ -z "$DEPRECATED_IDS" ]]; then
+        DEPRECATED_IDS="$ID"
+      else
+        DEPRECATED_IDS="$DEPRECATED_IDS,$ID"
+      fi
+      continue  # Skip deprecated learnings
+    fi
+
+    ACTIVE_COUNT=$((ACTIVE_COUNT + 1))
 
     # Extract category from frontmatter
     CATEGORY=$(echo "$CONTENT" | grep '^category:' | sed 's/category: *//' | sed 's/^"\(.*\)"$/\1/' | head -1)
@@ -124,10 +148,13 @@ cat > "$SUMMARY_FILE" << SUMMARY_EOF
 ---
 task_id: "$TASK_ID"
 last_updated: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-learning_count: $LEARNING_COUNT
+total_learning_count: $LEARNING_COUNT
+active_learning_count: $ACTIVE_COUNT
+deprecated_count: $TOTAL_DEPRECATED
 critical_count: $TOTAL_CRITICAL
 high_importance_count: $TOTAL_HIGH
 summarized_from: [$LEARNING_IDS]
+deprecated_ids: [$DEPRECATED_IDS]
 next_learning_id: $NEXT_ID
 categories:
   patterns: $PATTERN_COUNT
@@ -141,7 +168,7 @@ categories:
 
 ## Learnings Summary (Organized by Category)
 
-Total: $LEARNING_COUNT learnings | Critical: $TOTAL_CRITICAL | High importance: $TOTAL_HIGH
+Active: $ACTIVE_COUNT learnings | Deprecated: $TOTAL_DEPRECATED | Critical: $TOTAL_CRITICAL | High: $TOTAL_HIGH
 
 SUMMARY_EOF
 
@@ -228,6 +255,7 @@ cat >> "$SUMMARY_FILE" << 'FOOTER'
 
 *Auto-generated summary organized by category and importance.*
 *Critical/high importance learnings appear first for quick reference.*
+*Deprecated learnings are excluded from this summary.*
 FOOTER
 
 # Update state to record summarization
@@ -237,5 +265,24 @@ if [[ -f "$STATE_FILE" ]]; then
   mv "$TEMP_FILE" "$STATE_FILE"
 fi
 
-echo "Summarization triggered for task '$TASK_ID' ($LEARNING_COUNT learnings)"
+# === ARCHIVE MODE ===
+if [[ "$ARCHIVE_MODE" == "--archive" ]]; then
+  mkdir -p "$ARCHIVE_DIR"
+
+  ARCHIVED_COUNT=0
+  while IFS= read -r file; do
+    if [[ -f "$file" ]]; then
+      BASENAME=$(basename "$file")
+      # Don't archive the summary file
+      if [[ "$BASENAME" != "_summary.md" ]]; then
+        mv "$file" "$ARCHIVE_DIR/$BASENAME"
+        ARCHIVED_COUNT=$((ARCHIVED_COUNT + 1))
+      fi
+    fi
+  done <<< "$LEARNING_FILES"
+
+  echo "Archived $ARCHIVED_COUNT learnings to $ARCHIVE_DIR"
+fi
+
+echo "Summarization triggered for task '$TASK_ID' ($ACTIVE_COUNT active, $TOTAL_DEPRECATED deprecated)"
 echo "Summary file: $SUMMARY_FILE"

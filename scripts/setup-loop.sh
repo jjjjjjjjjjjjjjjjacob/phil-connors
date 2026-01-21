@@ -36,7 +36,7 @@ OPTIONS:
   --skills-config '<text>'      Initial content for .agent/skills-lock.md (overrides template)
   --continuation-prompt '<text>' Prompt to inject after completion for chaining tasks
   --max-continuations <n>        Max task continuations (default: 0 = no chaining)
-  --min-continuations <n>        Force at least N continuations before checking promise (default: 0)
+  --min-continuations <n>        Guarantee at least N continuations after each completion (default: 0)
   -h, --help                    Show this help
 
 DESCRIPTION:
@@ -117,6 +117,12 @@ done
 PROMPT="${PROMPT_PARTS[*]}"
 
 [[ -z "$PROMPT" ]] && { echo "Error: No prompt provided" >&2; exit 1; }
+
+# If min-continuations is set, ensure max-continuations is at least that value
+if [[ $MIN_CONTINUATIONS -gt 0 ]] && [[ $MAX_CONTINUATIONS -lt $MIN_CONTINUATIONS ]]; then
+  MAX_CONTINUATIONS=$MIN_CONTINUATIONS
+  echo "Note: max-continuations set to $MAX_CONTINUATIONS (matching min-continuations)"
+fi
 
 # Generate task ID if not provided
 if [[ -z "$TASK_ID" ]]; then
@@ -228,7 +234,7 @@ Task ID: $TASK_ID
 Iteration: 1
 Max iterations: $(if [[ $MAX_ITERATIONS -gt 0 ]]; then echo $MAX_ITERATIONS; else echo "unlimited"; fi)
 Completion promise: $(if [[ "$COMPLETION_PROMISE" != "null" ]]; then echo "$COMPLETION_PROMISE"; else echo "(none - runs until max iterations)"; fi)
-$(if [[ -n "$CONTINUATION_PROMPT" ]] && [[ $MAX_CONTINUATIONS -gt 0 ]]; then echo "Continuation: enabled ($MAX_CONTINUATIONS max)"; fi)
+$(if [[ -n "$CONTINUATION_PROMPT" ]]; then if [[ $MIN_CONTINUATIONS -gt 0 ]] && [[ $MAX_CONTINUATIONS -gt 0 ]]; then echo "Continuation: enabled (min: $MIN_CONTINUATIONS, max: $MAX_CONTINUATIONS)"; elif [[ $MIN_CONTINUATIONS -gt 0 ]]; then echo "Continuation: enabled (min: $MIN_CONTINUATIONS)"; elif [[ $MAX_CONTINUATIONS -gt 0 ]]; then echo "Continuation: enabled (max: $MAX_CONTINUATIONS)"; fi; fi)
 Summarize after: $SUMMARIZATION_THRESHOLD learnings
 
 Files created:
