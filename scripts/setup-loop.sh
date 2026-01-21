@@ -14,6 +14,7 @@ SUMMARIZATION_THRESHOLD=10
 SKILLS_CONFIG=""
 CONTINUATION_PROMPT=""
 MAX_CONTINUATIONS=0
+MIN_CONTINUATIONS=0
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -35,6 +36,7 @@ OPTIONS:
   --skills-config '<text>'      Initial content for .agent/skills-lock.md (overrides template)
   --continuation-prompt '<text>' Prompt to inject after completion for chaining tasks
   --max-continuations <n>        Max task continuations (default: 0 = no chaining)
+  --min-continuations <n>        Force at least N continuations before checking promise (default: 0)
   -h, --help                    Show this help
 
 DESCRIPTION:
@@ -97,6 +99,12 @@ HELP_EOF
       [[ -z "${2:-}" ]] && { echo "Error: --max-continuations requires a number" >&2; exit 1; }
       [[ ! "$2" =~ ^[0-9]+$ ]] && { echo "Error: --max-continuations must be a positive integer" >&2; exit 1; }
       MAX_CONTINUATIONS="$2"
+      shift 2
+      ;;
+    --min-continuations)
+      [[ -z "${2:-}" ]] && { echo "Error: --min-continuations requires a number" >&2; exit 1; }
+      [[ ! "$2" =~ ^[0-9]+$ ]] && { echo "Error: --min-continuations must be a positive integer" >&2; exit 1; }
+      MIN_CONTINUATIONS="$2"
       shift 2
       ;;
     *)
@@ -165,6 +173,7 @@ max_iterations: $MAX_ITERATIONS
 completion_promise: "$(echo "$COMPLETION_PROMISE" | sed 's/"/\\"/g')"
 continuation_prompt: "$(echo "$CONTINUATION_PROMPT" | sed 's/"/\\"/g')"
 max_continuations: $MAX_CONTINUATIONS
+min_continuations: $MIN_CONTINUATIONS
 continuation_count: 0
 original_prompt: |
   $PROMPT

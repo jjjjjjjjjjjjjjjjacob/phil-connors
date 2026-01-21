@@ -1,10 +1,10 @@
 {
   "name": "phil-connors",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Iterative development loops with three-tier persistent skill hierarchy. Global skills (immutable), task context (non-editable in loop), and learned skills (malleable with auto-summarization). Never lose context between iterations.",
   "author": {
     "name": "Jacob",
     "email": ""
   },
-  "keywords": ["loop", "iterative", "context", "memory", "skills", "learning", "groundhog"]
+  "keywords": ["loop", "iterative", "context", "memory", "skills", "learning", "groundhog", "pause", "resume"]
 }

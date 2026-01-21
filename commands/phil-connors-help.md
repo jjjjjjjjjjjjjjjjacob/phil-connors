@@ -24,42 +24,71 @@ Phil-Connors extends the Ralph Wiggum technique with **persistent context manage
 
 ### Tier 3: Learned Skills (MALLEABLE)
 - **Directory**: `.agent/phil-connors/tasks/{task-id}/learned/`
-- **Behavior**: Individual files for each learning
-- **Contents**: Discoveries, patterns, anti-patterns
+- **Behavior**: Individual files for each learning, categorized
+- **Contents**: Discoveries, patterns, anti-patterns, solutions, blockers
 - **Injection**: Summarized version included in systemMessage
 
 ## Commands
 
-### /phil-connors "PROMPT" [OPTIONS]
-Start a loop with persistent context.
+| Command | Description |
+|---------|-------------|
+| `/phil-connors "PROMPT" [OPTIONS]` | Start a loop with persistent context |
+| `/phil-connors-learn [OPTIONS] "insight"` | Add a categorized learning |
+| `/phil-connors-pause` | Pause loop (state preserved for resume) |
+| `/phil-connors-resume [TASK_ID]` | Resume a paused task |
+| `/phil-connors-list` | List all tasks with status |
+| `/cancel-phil-connors` | Cancel loop (alias for pause) |
 
-**Options:**
+### /phil-connors Options
+
 - `--completion-promise '<text>'` - Promise to signal completion (REQUIRED)
 - `--max-iterations <n>` - Max iterations (default: 20)
+- `--continuation-prompt '<text>'` - Prompt for task chaining
+- `--max-continuations <n>` - Max task continuations (default: 0)
+- `--min-continuations <n>` - Force minimum continuations (default: 0)
 - `--task-id '<id>'` - Custom task identifier
 - `--summarize-after <n>` - Summarize after N learnings (default: 10)
+- `--skills-config '<text>'` - Initial content for skills-lock.md
 
-### /cancel-phil-connors
-Cancel the active loop. State is preserved (not deleted) for potential resume.
+### /phil-connors-learn Options
 
-### /phil-connors-learn "insight"
-Add a learning during iteration. Learnings persist and are auto-summarized.
+- `--category <cat>` or `-c` - Category: discovery, pattern, anti-pattern, file-location, constraint, solution, blocker
+- `--importance <lvl>` or `-i` - Importance: low, medium, high, critical
+- `--file <path>` or `-f` - Related file path (can specify multiple)
 
 ## Example Session
 
-```
+```bash
+# Start a loop
 /phil-connors "Refactor auth to JWT" --completion-promise "All tests passing" --max-iterations 15
-```
 
-During iteration:
-```
-/phil-connors-learn "JWT library requires async operations for production"
-/phil-connors-learn "Token expiry must be checked before validation"
-```
+# Add learnings with categories
+/phil-connors-learn "JWT library requires async operations"
+/phil-connors-learn -c pattern "Always validate token before processing"
+/phil-connors-learn -c anti-pattern -i high "Don't store tokens in localStorage"
+/phil-connors-learn -c file-location -f src/auth/jwt.ts "JWT validation logic here"
 
-When complete:
-```
+# When complete
 <promise>All tests passing</promise>
+```
+
+## Task Chaining
+
+Chain multiple tasks together with `--continuation-prompt`:
+
+```bash
+/phil-connors "Build the MVP" --completion-promise "Feature complete" \
+  --continuation-prompt "What's the next priority? Implement it." \
+  --max-continuations 5
+```
+
+## Pause & Resume
+
+```bash
+/phil-connors-pause              # Pause current loop
+/phil-connors-list               # List all tasks
+/phil-connors-resume my-task-id  # Resume specific task
+/phil-connors-resume             # Resume most recent
 ```
 
 ## Key Differences from Wiggum
@@ -68,9 +97,11 @@ When complete:
 |---------|--------|--------------|
 | Global skills | None | Injected every iteration |
 | Task context | None | Preserved and expanded |
-| Learnings | Lost between iterations | Accumulated and summarized |
+| Learnings | Lost between iterations | Accumulated, categorized, summarized |
 | State persistence | Session only | Preserved after loop ends |
 | Context injection | Original prompt only | All three tiers |
+| Task chaining | None | Continuation prompts |
+| Pause/Resume | None | Full support |
 
 ## File Structure
 

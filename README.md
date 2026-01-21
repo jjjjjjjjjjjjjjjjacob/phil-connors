@@ -28,16 +28,21 @@ Unlike Wiggum which loses context between iterations (only passing back the orig
 ### Tier 3: Learned Skills (MALLEABLE)
 - **Directory**: `.agent/phil-connors/tasks/{task-id}/learned/`
 - Individual files for each learning (001.md, 002.md, etc.)
+- **Categorized** by type: discovery, pattern, anti-pattern, file-location, constraint, solution, blocker
+- **Importance levels**: low, medium, high, critical
 - Auto-summarized when count reaches threshold (default: 10)
-- Condensed summary injected into systemMessage
+- Summary organized by category and importance for quick reference
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
 | `/phil-connors "PROMPT" [OPTIONS]` | Start a loop with persistent context |
-| `/cancel-phil-connors` | Cancel loop (state preserved) |
-| `/phil-connors-learn "insight"` | Add a learning during iteration |
+| `/phil-connors-learn [OPTIONS] "insight"` | Add a categorized learning during iteration |
+| `/phil-connors-pause` | Pause loop (state preserved for resume) |
+| `/phil-connors-resume [TASK_ID]` | Resume a paused task |
+| `/phil-connors-list` | List all tasks with status |
+| `/cancel-phil-connors` | Cancel loop (alias for pause) |
 | `/phil-connors-help` | Show detailed help |
 
 ### Options
@@ -46,6 +51,7 @@ Unlike Wiggum which loses context between iterations (only passing back the orig
 - `--max-iterations <n>` - Max iterations (default: 20)
 - `--continuation-prompt '<text>'` - Prompt to inject after completion for task chaining
 - `--max-continuations <n>` - Max task continuations (default: 0 = no chaining)
+- `--min-continuations <n>` - Force at least N continuations before checking promise (default: 0)
 - `--task-id '<id>'` - Custom task identifier
 - `--summarize-after <n>` - Summarize after N learnings (default: 10)
 - `--skills-config '<text>'` - Initial content for `.agent/skills-lock.md` (overrides template)
@@ -61,15 +67,41 @@ Unlike Wiggum which loses context between iterations (only passing back the orig
 - Never commit .env files
 "
 
-# During iteration, RECORD LEARNINGS (critical!)
+# During iteration, RECORD LEARNINGS with categories (critical!)
 /phil-connors-learn "JWT library requires async operations"
-/phil-connors-learn "Token expiry must be checked before validation"
+/phil-connors-learn --category pattern "Always validate token before processing"
+/phil-connors-learn -c anti-pattern -i high "Don't store tokens in localStorage"
+/phil-connors-learn -c file-location -f src/auth/jwt.ts "JWT validation logic here"
+/phil-connors-learn -c solution "Fixed by adding null check at line 42"
 
 # When truly complete, you MUST output with promise tags:
 <promise>All tests passing</promise>
 ```
 
 **IMPORTANT**: Always use `/phil-connors-learn` to record discoveries. Learnings persist across context resets - without them, you'll rediscover the same things repeatedly.
+
+### Learning Categories & Options
+
+The `/phil-connors-learn` command supports categorization for better organization:
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--category <cat>` | `-c` | Category: discovery, pattern, anti-pattern, file-location, constraint, solution, blocker |
+| `--importance <lvl>` | `-i` | Importance: low, medium, high, critical |
+| `--file <path>` | `-f` | Related file path (can specify multiple) |
+
+**Categories explained:**
+- `discovery` - General findings about the codebase (default)
+- `pattern` - Useful patterns to follow
+- `anti-pattern` - Things NOT to do
+- `file-location` - Important file locations
+- `constraint` - Constraints or requirements discovered
+- `solution` - Solutions that worked
+- `blocker` - Issues blocking progress
+
+**When summarization triggers**, learnings are auto-organized by:
+1. Critical/high importance items first (always apply these)
+2. Then grouped by category for easy lookup
 
 ## Task Chaining (Continuations)
 
@@ -88,6 +120,30 @@ Chain multiple tasks together automatically with `--continuation-prompt` and `--
 4. Repeat until `max_continuations` is reached, then the loop ends
 
 This is useful for open-ended development sessions where you want the assistant to autonomously work through multiple features or tasks.
+
+## Pause & Resume
+
+Pause a loop to continue later in a new session:
+
+```bash
+# Pause the current loop
+/phil-connors-pause
+
+# List all tasks (active, paused, done)
+/phil-connors-list
+
+# Resume a specific task
+/phil-connors-resume my-task-20260121120000
+
+# Resume the most recent task
+/phil-connors-resume
+```
+
+**How it works:**
+- Pause sets `active: false` but preserves all state (learnings, context, iteration)
+- Resume sets `active: true` and continues from where you left off
+- All learnings persist and are re-injected on resume
+- Task list shows status of all tasks for easy reference
 
 ## File Structure Created
 
@@ -109,9 +165,31 @@ This is useful for open-ended development sessions where you want the assistant 
 
 1. **Setup**: Creates state file and task directory structure
 2. **Each Iteration**: Stop hook injects all three tiers into systemMessage
-3. **Learning**: `/phil-connors-learn` adds numbered files to learned directory
-4. **Summarization**: When learning count hits threshold, creates condensed summary
-5. **Completion**: Detects `<promise>` tags and deactivates loop (state preserved)
+3. **Learning**: `/phil-connors-learn` adds categorized files to learned directory
+4. **Progress Tracking**: Each iteration's metrics are logged (tool calls, file ops, errors)
+5. **Summarization**: When learning count hits threshold, creates categorized summary
+6. **Completion**: Detects `<promise>` tags and deactivates loop (state preserved)
+
+## Iteration Progress Tracking
+
+Each iteration automatically tracks and logs metrics to the state file:
+
+- **Tool calls**: Total tools invoked
+- **File reads**: Files read during iteration
+- **File edits**: Files modified or written
+- **Errors found**: Error mentions in output
+
+This creates a progress history in `.agent/phil-connors/state.md`:
+
+```
+## Session History
+- Iteration 1: Starting task
+- Iteration 1 (14:32:05): tools=12, reads=4, edits=2, errors=0
+- Iteration 2 (14:35:22): tools=8, reads=2, edits=3, errors=1
+- Iteration 3 → Continuation 1 (14:40:15): Task completed, starting next
+```
+
+The current iteration's metrics are also shown in the systemMessage header for visibility.
 
 ## Technical Details
 

@@ -54,6 +54,7 @@ Learnings are CRITICAL - they persist across context resets. Record:
 - `--max-iterations <n>` - Max iterations before auto-stop (default: 20)
 - `--continuation-prompt '<text>'` - Prompt to inject after completion for chaining tasks
 - `--max-continuations <n>` - Max task continuations (default: 0 = no chaining)
+- `--min-continuations <n>` - Force at least N continuations before checking promise (default: 0)
 - `--skills-config '<text>'` - Initial content for .agent/skills-lock.md (overrides template)
 - `--task-id '<id>'` - Custom task identifier
 - `--summarize-after <n>` - Auto-summarize learnings after N entries (default: 10)

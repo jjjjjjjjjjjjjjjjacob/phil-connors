@@ -1,6 +1,6 @@
 ---
-description: "Add a learning during phil-connors iteration"
-argument-hint: "\"insight or discovery\""
+description: "Add a categorized learning during phil-connors iteration"
+argument-hint: "[OPTIONS] \"insight or discovery\""
 allowed-tools: ["Bash"]
 ---
 
@@ -18,15 +18,41 @@ Use this command to record:
 - Anti-patterns to avoid
 - Key insights for future iterations
 
-Learnings are:
-- Stored as individual files in `.agent/phil-connors/tasks/{task-id}/learned/`
-- Automatically included in future iterations
-- Auto-summarized when the threshold is reached (default: 10 learnings)
+## Options
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--category <cat>` | `-c` | Category for the learning (default: discovery) |
+| `--importance <lvl>` | `-i` | Importance: low, medium, high, critical (default: medium) |
+| `--file <path>` | `-f` | Related file path (can specify multiple times) |
+| `--help` | `-h` | Show help |
+
+## Categories
+
+- `discovery` - General findings (default)
+- `pattern` - Useful patterns to follow
+- `anti-pattern` - Things NOT to do
+- `file-location` - Important file locations
+- `constraint` - Constraints or requirements discovered
+- `solution` - Solutions that worked
+- `blocker` - Issues blocking progress
 
 ## Examples
 
 ```
-/phil-connors-learn "JWT library requires async operations for production"
-/phil-connors-learn "Tests must reset auth state between runs"
-/phil-connors-learn "The config loader caches on first call - restart required for changes"
+# Basic learning (default: discovery category, medium importance)
+/phil-connors-learn "JWT library requires async operations"
+
+# Categorized learnings
+/phil-connors-learn --category pattern "Always validate token before processing"
+/phil-connors-learn -c anti-pattern -i high "Don't store tokens in localStorage"
+/phil-connors-learn -c file-location -f src/auth/jwt.ts "JWT validation logic here"
+/phil-connors-learn -c solution "Fixed by adding null check at line 42"
+/phil-connors-learn -c constraint "Must support both OAuth and API key auth"
+/phil-connors-learn -c blocker "Redis connection failing in CI environment"
 ```
+
+Learnings are:
+- Stored as individual files in `.agent/phil-connors/tasks/{task-id}/learned/`
+- Automatically included in future iterations
+- Auto-summarized when threshold reached (organized by category and importance)
