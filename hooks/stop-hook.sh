@@ -26,6 +26,12 @@ COMPLETION_PROMISE=$(echo "$FRONTMATTER" | grep '^completion_promise:' | sed 's/
 TASK_ID=$(echo "$FRONTMATTER" | grep '^task_id:' | sed 's/task_id: *//' | sed 's/^"\(.*\)"$/\1/')
 LEARNING_COUNT=$(echo "$FRONTMATTER" | grep '^learning_count:' | sed 's/learning_count: *//' || echo "0")
 SUMMARIZATION_THRESHOLD=$(echo "$FRONTMATTER" | grep '^summarization_threshold:' | sed 's/summarization_threshold: *//' || echo "10")
+CONTINUATION_PROMPT=$(echo "$FRONTMATTER" | grep '^continuation_prompt:' | sed 's/continuation_prompt: *//' | sed 's/^"\(.*\)"$/\1/' || echo "")
+MAX_CONTINUATIONS=$(echo "$FRONTMATTER" | grep '^max_continuations:' | sed 's/max_continuations: *//' || echo "0")
+CONTINUATION_COUNT=$(echo "$FRONTMATTER" | grep '^continuation_count:' | sed 's/continuation_count: *//' || echo "0")
+
+# Flag for continuation mode
+CONTINUING=false
 
 # Validate active state
 if [[ "$ACTIVE" != "true" ]]; then
@@ -66,10 +72,30 @@ if [[ -f "$TRANSCRIPT_PATH" ]]; then
       PROMISE_TEXT=$(echo "$LAST_OUTPUT" | perl -0777 -pe 's/.*?<promise>(.*?)<\/promise>.*/$1/s; s/^\s+|\s+$//g; s/\s+/ /g' 2>/dev/null || echo "")
 
       if [[ -n "$PROMISE_TEXT" ]] && [[ "$PROMISE_TEXT" = "$COMPLETION_PROMISE" ]]; then
-        echo "Phil-Connors loop: Detected <promise>$COMPLETION_PROMISE</promise>"
-        sed -i.bak 's/^active: true/active: false/' "$STATE_FILE" 2>/dev/null || \
-          sed -i '' 's/^active: true/active: false/' "$STATE_FILE" 2>/dev/null || true
-        exit 0
+        # Check if continuations are available
+        if [[ "$MAX_CONTINUATIONS" =~ ^[0-9]+$ ]] && [[ "$CONTINUATION_COUNT" =~ ^[0-9]+$ ]] && \
+           [[ $MAX_CONTINUATIONS -gt 0 ]] && [[ $CONTINUATION_COUNT -lt $MAX_CONTINUATIONS ]] && \
+           [[ -n "$CONTINUATION_PROMPT" ]]; then
+          # Continuation mode: reset iteration, increment continuation count
+          NEXT_CONTINUATION=$((CONTINUATION_COUNT + 1))
+          echo "Phil-Connors: Task completed. Starting continuation $NEXT_CONTINUATION of $MAX_CONTINUATIONS"
+
+          # Update state file: reset iteration to 1, increment continuation_count
+          TEMP_FILE="${STATE_FILE}.tmp.$$"
+          sed "s/^iteration: .*/iteration: 1/" "$STATE_FILE" | \
+            sed "s/^continuation_count: .*/continuation_count: $NEXT_CONTINUATION/" | \
+            sed "s/^last_iteration_at: .*/last_iteration_at: \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"/" > "$TEMP_FILE"
+          mv "$TEMP_FILE" "$STATE_FILE"
+
+          CONTINUING=true
+          NEXT_ITERATION=1
+        else
+          # No continuations left - end loop normally
+          echo "Phil-Connors loop: Detected <promise>$COMPLETION_PROMISE</promise>"
+          sed -i.bak 's/^active: true/active: false/' "$STATE_FILE" 2>/dev/null || \
+            sed -i '' 's/^active: true/active: false/' "$STATE_FILE" 2>/dev/null || true
+          exit 0
+        fi
       fi
     fi
   fi
@@ -85,12 +111,14 @@ if [[ "$LEARNING_COUNT" =~ ^[0-9]+$ ]] && [[ "$SUMMARIZATION_THRESHOLD" =~ ^[0-9
   fi
 fi
 
-# Update iteration
-NEXT_ITERATION=$((ITERATION + 1))
-TEMP_FILE="${STATE_FILE}.tmp.$$"
-sed "s/^iteration: .*/iteration: $NEXT_ITERATION/" "$STATE_FILE" | \
-  sed "s/^last_iteration_at: .*/last_iteration_at: \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"/" > "$TEMP_FILE"
-mv "$TEMP_FILE" "$STATE_FILE"
+# Update iteration (skip if we just handled continuation)
+if [[ "$CONTINUING" != "true" ]]; then
+  NEXT_ITERATION=$((ITERATION + 1))
+  TEMP_FILE="${STATE_FILE}.tmp.$$"
+  sed "s/^iteration: .*/iteration: $NEXT_ITERATION/" "$STATE_FILE" | \
+    sed "s/^last_iteration_at: .*/last_iteration_at: \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"/" > "$TEMP_FILE"
+  mv "$TEMP_FILE" "$STATE_FILE"
+fi
 
 # === TIER 1: GLOBAL SKILLS (IMMUTABLE) ===
 SKILLS_LOCK=""
@@ -145,7 +173,25 @@ if [[ $MAX_ITERATIONS -gt 0 ]]; then
   ITER_INFO="$ITER_INFO of $MAX_ITERATIONS"
 fi
 
-SYSTEM_MSG="================================================================================
+# Build continuation header if in continuation mode
+CONTINUATION_HEADER=""
+if [[ "$CONTINUING" == "true" ]]; then
+  CONTINUATION_HEADER="================================================================================
+>>> CONTINUATION $NEXT_CONTINUATION of $MAX_CONTINUATIONS <<<
+================================================================================
+PREVIOUS TASK COMPLETED! Now respond to this continuation prompt:
+
+$CONTINUATION_PROMPT
+
+Work on the next task. When THAT task is complete, output:
+<promise>$COMPLETION_PROMISE</promise>
+
+================================================================================
+
+"
+fi
+
+SYSTEM_MSG="${CONTINUATION_HEADER}================================================================================
 >>> HOW TO COMPLETE THIS LOOP - READ THIS FIRST <<<
 ================================================================================
 When the task is TRULY complete, you MUST output EXACTLY this text:

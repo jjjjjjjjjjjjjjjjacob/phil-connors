@@ -1,6 +1,6 @@
 ---
 description: "Start phil-connors loop with persistent context"
-argument-hint: "PROMPT --completion-promise TEXT [--max-iterations N] [--skills-config TEXT]"
+argument-hint: "PROMPT --completion-promise TEXT [--continuation-prompt TEXT --max-continuations N]"
 allowed-tools: ["Bash"]
 ---
 
@@ -52,9 +52,23 @@ Learnings are CRITICAL - they persist across context resets. Record:
 
 - `--completion-promise '<text>'` - Required. Text that signals task completion
 - `--max-iterations <n>` - Max iterations before auto-stop (default: 20)
+- `--continuation-prompt '<text>'` - Prompt to inject after completion for chaining tasks
+- `--max-continuations <n>` - Max task continuations (default: 0 = no chaining)
 - `--skills-config '<text>'` - Initial content for .agent/skills-lock.md (overrides template)
 - `--task-id '<id>'` - Custom task identifier
 - `--summarize-after <n>` - Auto-summarize learnings after N entries (default: 10)
+
+## Example with Continuations
+
+Chain multiple tasks together automatically:
+
+```
+/phil-connors "Implement user auth" --completion-promise "Feature complete" \
+  --continuation-prompt "What's the next priority feature? Pick one and implement it." \
+  --max-continuations 5 --max-iterations 15
+```
+
+When you output `<promise>Feature complete</promise>`, the loop resets iteration count and injects the continuation prompt to start the next task.
 
 ## Example with Skills Config
 

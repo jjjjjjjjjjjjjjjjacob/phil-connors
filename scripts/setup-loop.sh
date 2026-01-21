@@ -12,6 +12,8 @@ COMPLETION_PROMISE="null"
 TASK_ID=""
 SUMMARIZATION_THRESHOLD=10
 SKILLS_CONFIG=""
+CONTINUATION_PROMPT=""
+MAX_CONTINUATIONS=0
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -31,6 +33,8 @@ OPTIONS:
   --task-id '<id>'              Custom task identifier (default: auto-generated)
   --summarize-after <n>         Summarize learnings after N entries (default: 10)
   --skills-config '<text>'      Initial content for .agent/skills-lock.md (overrides template)
+  --continuation-prompt '<text>' Prompt to inject after completion for chaining tasks
+  --max-continuations <n>        Max task continuations (default: 0 = no chaining)
   -h, --help                    Show this help
 
 DESCRIPTION:
@@ -82,6 +86,17 @@ HELP_EOF
     --skills-config)
       [[ -z "${2:-}" ]] && { echo "Error: --skills-config requires text" >&2; exit 1; }
       SKILLS_CONFIG="$2"
+      shift 2
+      ;;
+    --continuation-prompt)
+      [[ -z "${2:-}" ]] && { echo "Error: --continuation-prompt requires text" >&2; exit 1; }
+      CONTINUATION_PROMPT="$2"
+      shift 2
+      ;;
+    --max-continuations)
+      [[ -z "${2:-}" ]] && { echo "Error: --max-continuations requires a number" >&2; exit 1; }
+      [[ ! "$2" =~ ^[0-9]+$ ]] && { echo "Error: --max-continuations must be a positive integer" >&2; exit 1; }
+      MAX_CONTINUATIONS="$2"
       shift 2
       ;;
     *)
@@ -148,6 +163,9 @@ task_id: "$TASK_ID"
 iteration: 1
 max_iterations: $MAX_ITERATIONS
 completion_promise: "$(echo "$COMPLETION_PROMISE" | sed 's/"/\\"/g')"
+continuation_prompt: "$(echo "$CONTINUATION_PROMPT" | sed 's/"/\\"/g')"
+max_continuations: $MAX_CONTINUATIONS
+continuation_count: 0
 original_prompt: |
   $PROMPT
 started_at: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -201,6 +219,7 @@ Task ID: $TASK_ID
 Iteration: 1
 Max iterations: $(if [[ $MAX_ITERATIONS -gt 0 ]]; then echo $MAX_ITERATIONS; else echo "unlimited"; fi)
 Completion promise: $(if [[ "$COMPLETION_PROMISE" != "null" ]]; then echo "$COMPLETION_PROMISE"; else echo "(none - runs until max iterations)"; fi)
+$(if [[ -n "$CONTINUATION_PROMPT" ]] && [[ $MAX_CONTINUATIONS -gt 0 ]]; then echo "Continuation: enabled ($MAX_CONTINUATIONS max)"; fi)
 Summarize after: $SUMMARIZATION_THRESHOLD learnings
 
 Files created:

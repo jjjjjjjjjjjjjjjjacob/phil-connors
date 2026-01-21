@@ -44,6 +44,8 @@ Unlike Wiggum which loses context between iterations (only passing back the orig
 
 - `--completion-promise '<text>'` - Promise to signal completion (REQUIRED)
 - `--max-iterations <n>` - Max iterations (default: 20)
+- `--continuation-prompt '<text>'` - Prompt to inject after completion for task chaining
+- `--max-continuations <n>` - Max task continuations (default: 0 = no chaining)
 - `--task-id '<id>'` - Custom task identifier
 - `--summarize-after <n>` - Summarize after N learnings (default: 10)
 - `--skills-config '<text>'` - Initial content for `.agent/skills-lock.md` (overrides template)
@@ -68,6 +70,24 @@ Unlike Wiggum which loses context between iterations (only passing back the orig
 ```
 
 **IMPORTANT**: Always use `/phil-connors-learn` to record discoveries. Learnings persist across context resets - without them, you'll rediscover the same things repeatedly.
+
+## Task Chaining (Continuations)
+
+Chain multiple tasks together automatically with `--continuation-prompt` and `--max-continuations`:
+
+```bash
+/phil-connors "Build the MVP" --completion-promise "Feature complete" \
+  --continuation-prompt "What's the next priority feature? Pick one and implement it." \
+  --max-continuations 5 --max-iterations 15
+```
+
+**How it works:**
+1. When you output `<promise>Feature complete</promise>`, the loop doesn't end
+2. Instead, iteration resets to 1 and the continuation prompt is injected
+3. You pick the next task and work on it
+4. Repeat until `max_continuations` is reached, then the loop ends
+
+This is useful for open-ended development sessions where you want the assistant to autonomously work through multiple features or tasks.
 
 ## File Structure Created
 
