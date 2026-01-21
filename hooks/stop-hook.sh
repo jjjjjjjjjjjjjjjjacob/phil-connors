@@ -57,8 +57,24 @@ if [[ $MAX_ITERATIONS -gt 0 ]] && [[ $ITERATION -ge $MAX_ITERATIONS ]]; then
   exit 0
 fi
 
-# Get transcript and check for completion promise
+# Get transcript path
 TRANSCRIPT_PATH=$(echo "$HOOK_INPUT" | jq -r '.transcript_path')
+
+# === PASSTHROUGH COMMAND DETECTION ===
+# These commands should NOT count as loop iterations or trigger continuation
+PASSTHROUGH_COMMANDS="phil-connors-help|phil-connors-status|phil-connors-search|phil-connors-list|phil-connors-checkpoints"
+
+if [[ -f "$TRANSCRIPT_PATH" ]]; then
+  # Extract last user message from transcript
+  LAST_USER_MSG=$(grep '"role":"user"' "$TRANSCRIPT_PATH" | tail -1 | jq -r '.message.content[] | select(.type=="text") | .text' 2>/dev/null || echo "")
+
+  # Check if this was a passthrough command - allow exit without affecting loop
+  if echo "$LAST_USER_MSG" | grep -qiE "/(${PASSTHROUGH_COMMANDS})(\s|$)"; then
+    exit 0
+  fi
+fi
+
+# Get last assistant output for completion promise check
 LAST_OUTPUT=""
 
 if [[ -f "$TRANSCRIPT_PATH" ]]; then

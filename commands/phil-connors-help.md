@@ -1,8 +1,13 @@
 ---
 description: "Explain phil-connors plugin and commands"
+allowed-tools: []
 ---
 
+This is informational help text. Simply display this content to the user and do nothing else.
+
 # Phil-Connors Plugin Help
+
+**Version: 1.4.0**
 
 ## What is Phil-Connors?
 
