@@ -30,6 +30,8 @@ CONTINUATION_PROMPT=$(echo "$FRONTMATTER" | grep '^continuation_prompt:' | sed '
 MAX_CONTINUATIONS=$(echo "$FRONTMATTER" | grep '^max_continuations:' | sed 's/max_continuations: *//' || echo "0")
 MIN_CONTINUATIONS=$(echo "$FRONTMATTER" | grep '^min_continuations:' | sed 's/min_continuations: *//' || echo "0")
 CONTINUATION_COUNT=$(echo "$FRONTMATTER" | grep '^continuation_count:' | sed 's/continuation_count: *//' || echo "0")
+AUTO_CHECKPOINT=$(echo "$FRONTMATTER" | grep '^auto_checkpoint:' | sed 's/auto_checkpoint: *//' || echo "false")
+AUTO_CHECKPOINT_INTERVAL=$(echo "$FRONTMATTER" | grep '^auto_checkpoint_interval:' | sed 's/auto_checkpoint_interval: *//' || echo "0")
 
 # Flag for continuation mode
 CONTINUING=false
@@ -49,7 +51,7 @@ fi
 
 # Check max iterations
 if [[ $MAX_ITERATIONS -gt 0 ]] && [[ $ITERATION -ge $MAX_ITERATIONS ]]; then
-  echo "Phil-Connors loop: Max iterations ($MAX_ITERATIONS) reached."
+  echo "Phil-Connors loop: Max iterations ($MAX_ITERATIONS) reached." >&2
   sed -i.bak 's/^active: true/active: false/' "$STATE_FILE" 2>/dev/null || \
     sed -i '' 's/^active: true/active: false/' "$STATE_FILE" 2>/dev/null || true
   exit 0
@@ -107,13 +109,13 @@ if [[ "$PROMISE_DETECTED" == "true" ]]; then
     # Continuation mode: reset iteration, increment continuation count
     NEXT_CONTINUATION=$((CONTINUATION_COUNT + 1))
 
-    # Build appropriate message
+    # Build appropriate message (stderr so it doesn't corrupt JSON output)
     if [[ $MIN_CONTINUATIONS -gt 0 ]] && [[ $MAX_CONTINUATIONS -gt 0 ]]; then
-      echo "Phil-Connors: Task completed. Starting continuation $NEXT_CONTINUATION (min: $MIN_CONTINUATIONS, max: $MAX_CONTINUATIONS)"
+      echo "Phil-Connors: Task completed. Starting continuation $NEXT_CONTINUATION (min: $MIN_CONTINUATIONS, max: $MAX_CONTINUATIONS)" >&2
     elif [[ $MIN_CONTINUATIONS -gt 0 ]]; then
-      echo "Phil-Connors: Task completed. Starting continuation $NEXT_CONTINUATION (min: $MIN_CONTINUATIONS)"
+      echo "Phil-Connors: Task completed. Starting continuation $NEXT_CONTINUATION (min: $MIN_CONTINUATIONS)" >&2
     else
-      echo "Phil-Connors: Task completed. Starting continuation $NEXT_CONTINUATION of $MAX_CONTINUATIONS"
+      echo "Phil-Connors: Task completed. Starting continuation $NEXT_CONTINUATION of $MAX_CONTINUATIONS" >&2
     fi
 
     # Update state file: reset iteration to 1, increment continuation_count
@@ -127,7 +129,7 @@ if [[ "$PROMISE_DETECTED" == "true" ]]; then
     NEXT_ITERATION=1
   else
     # No continuations left or not configured - end loop normally
-    echo "Phil-Connors loop: Detected <promise>$COMPLETION_PROMISE</promise>"
+    echo "Phil-Connors loop: Detected <promise>$COMPLETION_PROMISE</promise>" >&2
     sed -i.bak 's/^active: true/active: false/' "$STATE_FILE" 2>/dev/null || \
       sed -i '' 's/^active: true/active: false/' "$STATE_FILE" 2>/dev/null || true
     exit 0
@@ -141,6 +143,28 @@ if [[ "$LEARNING_COUNT" =~ ^[0-9]+$ ]] && [[ "$SUMMARIZATION_THRESHOLD" =~ ^[0-9
     SCRIPT_DIR="$(dirname "$0")/../scripts"
     if [[ -x "$SCRIPT_DIR/summarize-learnings.sh" ]]; then
       "$SCRIPT_DIR/summarize-learnings.sh" "$TASK_ID" 2>/dev/null || true
+      # Auto-checkpoint after summarization if enabled
+      if [[ "$AUTO_CHECKPOINT" == "true" ]] && [[ -x "$SCRIPT_DIR/create-checkpoint.sh" ]]; then
+        "$SCRIPT_DIR/create-checkpoint.sh" --auto "Auto-checkpoint after summarization (iteration $ITERATION)" 2>/dev/null || true
+      fi
+    fi
+  fi
+fi
+
+# === AUTO-CHECKPOINT CHECK ===
+# Trigger auto-checkpoint on continuation or at interval
+if [[ "$AUTO_CHECKPOINT" == "true" ]]; then
+  SCRIPT_DIR="$(dirname "$0")/../scripts"
+
+  # Auto-checkpoint on continuation
+  if [[ "$CONTINUING" == "true" ]] && [[ -x "$SCRIPT_DIR/create-checkpoint.sh" ]]; then
+    "$SCRIPT_DIR/create-checkpoint.sh" --auto "Auto-checkpoint before continuation $NEXT_CONTINUATION" 2>/dev/null || true
+  fi
+
+  # Auto-checkpoint at interval
+  if [[ "$AUTO_CHECKPOINT_INTERVAL" =~ ^[0-9]+$ ]] && [[ $AUTO_CHECKPOINT_INTERVAL -gt 0 ]]; then
+    if [[ $((ITERATION % AUTO_CHECKPOINT_INTERVAL)) -eq 0 ]] && [[ -x "$SCRIPT_DIR/create-checkpoint.sh" ]]; then
+      "$SCRIPT_DIR/create-checkpoint.sh" --auto "Auto-checkpoint at iteration $ITERATION (interval: $AUTO_CHECKPOINT_INTERVAL)" 2>/dev/null || true
     fi
   fi
 fi

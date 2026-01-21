@@ -40,6 +40,9 @@ Unlike Wiggum which loses context between iterations (only passing back the orig
 | `/phil-connors "PROMPT" [OPTIONS]` | Start a loop with persistent context |
 | `/phil-connors-learn [OPTIONS] "insight"` | Add a categorized learning during iteration |
 | `/phil-connors-context-update [OPTIONS]` | Update task context (priority files, constraints, criteria) |
+| `/phil-connors-checkpoint "description"` | Create a checkpoint snapshot of current state |
+| `/phil-connors-checkpoints` | List all checkpoints |
+| `/phil-connors-rollback <id>` | Restore state to a previous checkpoint |
 | `/phil-connors-pause` | Pause loop (state preserved for resume) |
 | `/phil-connors-resume [TASK_ID]` | Resume a paused task |
 | `/phil-connors-list` | List all tasks with status |
@@ -56,6 +59,8 @@ Unlike Wiggum which loses context between iterations (only passing back the orig
 - `--task-id '<id>'` - Custom task identifier
 - `--summarize-after <n>` - Summarize after N learnings (default: 10)
 - `--skills-config '<text>'` - Initial content for `.agent/skills-lock.md` (overrides template)
+- `--auto-checkpoint` - Enable automatic checkpoints (on continuation, summarization)
+- `--auto-checkpoint-interval <n>` - Create checkpoint every N iterations (0 = disabled)
 
 ## Example Session
 
@@ -161,6 +166,54 @@ Chain multiple tasks together automatically with `--continuation-prompt` and `--
 
 This is useful for open-ended development sessions where you want the assistant to autonomously work through multiple features or tasks.
 
+## Checkpoints & Rollback
+
+Save snapshots of your loop state and restore them if iterations go wrong:
+
+```bash
+# Create a checkpoint before risky changes
+/phil-connors-checkpoint "Before refactoring auth module"
+
+# Create a checkpoint after reaching stability
+/phil-connors-checkpoint "All tests passing - safe point"
+
+# List all checkpoints
+/phil-connors-checkpoints
+
+# Rollback to a previous checkpoint
+/phil-connors-rollback 001
+
+# Rollback without safety checkpoint (not recommended)
+/phil-connors-rollback 002 --no-safety-checkpoint
+```
+
+**What checkpoints capture:**
+- Current iteration number and continuation count
+- All accumulated learnings
+- Task context (priority files, constraints, success criteria)
+- Session history at that point
+
+**When to create checkpoints:**
+- Before making risky changes
+- After reaching a stable state (tests passing)
+- Before trying a different approach
+- At significant milestones
+
+**Safety checkpoint:**
+By default, rolling back creates a safety checkpoint first. This allows recovery if you rollback to the wrong checkpoint. Use `--no-safety-checkpoint` to skip this.
+
+**Auto-checkpoints:**
+Enable automatic checkpoints with `--auto-checkpoint`:
+- Triggers on task continuation
+- Triggers after summarization
+- Optionally triggers at intervals with `--auto-checkpoint-interval <n>`
+
+```bash
+# Auto-checkpoint every 5 iterations
+/phil-connors "Build feature" --completion-promise "Done" \
+  --auto-checkpoint --auto-checkpoint-interval 5
+```
+
 ## Pause & Resume
 
 Pause a loop to continue later in a new session:
@@ -199,7 +252,14 @@ Pause a loop to continue later in a new session:
             │   ├── 001.md             # Individual learnings
             │   ├── 002.md
             │   └── _summary.md        # Auto-generated summary
-            └── learned-archive/       # Archived learnings (optional)
+            ├── learned-archive/       # Archived learnings (optional)
+            └── checkpoints/           # Checkpoint snapshots
+                ├── index.md           # Checkpoint registry
+                └── cp-001/            # Individual checkpoint
+                    ├── _meta.md       # Checkpoint metadata
+                    ├── state.md       # State at checkpoint
+                    ├── context.md     # Context at checkpoint
+                    └── learned/       # Learnings at checkpoint
 ```
 
 ## How It Works
@@ -207,9 +267,10 @@ Pause a loop to continue later in a new session:
 1. **Setup**: Creates state file and task directory structure
 2. **Each Iteration**: Stop hook injects all three tiers into systemMessage
 3. **Learning**: `/phil-connors-learn` adds categorized files to learned directory
-4. **Progress Tracking**: Each iteration's metrics are logged (tool calls, file ops, errors)
-5. **Summarization**: When learning count hits threshold, creates categorized summary
-6. **Completion**: Detects `<promise>` tags and deactivates loop (state preserved)
+4. **Checkpoints**: `/phil-connors-checkpoint` saves snapshots for rollback
+5. **Progress Tracking**: Each iteration's metrics are logged (tool calls, file ops, errors)
+6. **Summarization**: When learning count hits threshold, creates categorized summary
+7. **Completion**: Detects `<promise>` tags and deactivates loop (state preserved)
 
 ## Iteration Progress Tracking
 

@@ -15,6 +15,8 @@ SKILLS_CONFIG=""
 CONTINUATION_PROMPT=""
 MAX_CONTINUATIONS=0
 MIN_CONTINUATIONS=0
+AUTO_CHECKPOINT=false
+AUTO_CHECKPOINT_INTERVAL=0
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -37,6 +39,8 @@ OPTIONS:
   --continuation-prompt '<text>' Prompt to inject after completion for chaining tasks
   --max-continuations <n>        Max task continuations (default: 0 = no chaining)
   --min-continuations <n>        Guarantee at least N continuations after each completion (default: 0)
+  --auto-checkpoint              Enable automatic checkpoints (on continuation, summarization)
+  --auto-checkpoint-interval <n> Create checkpoint every N iterations (0 = disabled)
   -h, --help                    Show this help
 
 DESCRIPTION:
@@ -107,6 +111,17 @@ HELP_EOF
       MIN_CONTINUATIONS="$2"
       shift 2
       ;;
+    --auto-checkpoint)
+      AUTO_CHECKPOINT=true
+      shift
+      ;;
+    --auto-checkpoint-interval)
+      [[ -z "${2:-}" ]] && { echo "Error: --auto-checkpoint-interval requires a number" >&2; exit 1; }
+      [[ ! "$2" =~ ^[0-9]+$ ]] && { echo "Error: --auto-checkpoint-interval must be a positive integer" >&2; exit 1; }
+      AUTO_CHECKPOINT_INTERVAL="$2"
+      AUTO_CHECKPOINT=true
+      shift 2
+      ;;
     *)
       PROMPT_PARTS+=("$1")
       shift
@@ -132,6 +147,7 @@ fi
 
 # Create directory structure
 mkdir -p ".agent/phil-connors/tasks/$TASK_ID/learned"
+mkdir -p ".agent/phil-connors/tasks/$TASK_ID/checkpoints"
 
 # Create or update skills-lock.md
 if [[ -n "$SKILLS_CONFIG" ]]; then
@@ -181,12 +197,15 @@ continuation_prompt: "$(echo "$CONTINUATION_PROMPT" | sed 's/"/\\"/g')"
 max_continuations: $MAX_CONTINUATIONS
 min_continuations: $MIN_CONTINUATIONS
 continuation_count: 0
+auto_checkpoint: $AUTO_CHECKPOINT
+auto_checkpoint_interval: $AUTO_CHECKPOINT_INTERVAL
 original_prompt: |
   $PROMPT
 started_at: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 last_iteration_at: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 learning_count: 0
 last_summarization_at: null
+last_checkpoint_at: null
 summarization_threshold: $SUMMARIZATION_THRESHOLD
 ---
 
@@ -240,6 +259,7 @@ Summarize after: $SUMMARIZATION_THRESHOLD learnings
 Files created:
 - .agent/phil-connors/state.md
 - .agent/phil-connors/tasks/$TASK_ID/context.md
+- .agent/phil-connors/tasks/$TASK_ID/checkpoints/
 
 Three-Tier Skill Hierarchy Active:
 - Tier 1 (IMMUTABLE): .agent/skills-lock.md
@@ -248,8 +268,10 @@ Three-Tier Skill Hierarchy Active:
 
 IMPORTANT: Global skills from .agent/skills-lock.md are injected into EVERY
 iteration via systemMessage. You will NEVER lose this context.
+$(if [[ "$AUTO_CHECKPOINT" == "true" ]]; then echo ""; echo "Auto-checkpoint: ENABLED$(if [[ $AUTO_CHECKPOINT_INTERVAL -gt 0 ]]; then echo " (every $AUTO_CHECKPOINT_INTERVAL iterations)"; fi)"; fi)
 
 To add learnings: /phil-connors-learn "your insight"
+To create checkpoint: /phil-connors-checkpoint "description"
 To cancel: /cancel-phil-connors
 
 MSG_EOF
