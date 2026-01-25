@@ -9,3 +9,5 @@
 3. `commands/phil-connors-help.md` - `**Version: X.Y.Z**`
 
 Always verify all three locations match before committing version changes.
+
+**Rule**: The version in these files must always match the version in the most recent `vX.Y.Z` commit message. If a commit is tagged with a version (e.g., `v1.5.3: ...`), all version files must be updated to match.
