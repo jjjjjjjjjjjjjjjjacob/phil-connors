@@ -84,26 +84,18 @@ if [[ ${#PRIORITY_FILES[@]} -eq 0 ]] && [[ ${#CONSTRAINTS[@]} -eq 0 ]] && \
   exit 1
 fi
 
-# Read current state
+# Source shared libraries
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/parse-state.sh"
+source "$SCRIPT_DIR/lib/state-update.sh"
+
+# Read and validate state
 STATE_FILE=".agent/phil-connors/state.md"
+validate_state_exists "$STATE_FILE" || exit 1
+validate_state_active || exit 1
 
-if [[ ! -f "$STATE_FILE" ]]; then
-  echo "Error: No active phil-connors loop" >&2
-  echo "" >&2
-  echo "Start a loop first with:" >&2
-  echo "  /phil-connors \"your task\" --completion-promise \"done criteria\"" >&2
-  exit 1
-fi
-
-FRONTMATTER=$(sed -n '/^---$/,/^---$/{ /^---$/d; p; }' "$STATE_FILE")
-TASK_ID=$(echo "$FRONTMATTER" | grep '^task_id:' | sed 's/task_id: *//' | sed 's/^"\(.*\)"$/\1/')
-ACTIVE=$(echo "$FRONTMATTER" | grep '^active:' | sed 's/active: *//')
-ITERATION=$(echo "$FRONTMATTER" | grep '^iteration:' | sed 's/iteration: *//')
-
-if [[ "$ACTIVE" != "true" ]]; then
-  echo "Error: Phil-connors loop is not active" >&2
-  exit 1
-fi
+TASK_ID="${PC_TASK_ID:-}"
+ITERATION="${PC_ITERATION:-1}"
 
 # Read context file
 CONTEXT_FILE=".agent/phil-connors/tasks/$TASK_ID/context.md"
@@ -143,28 +135,27 @@ update_yaml_array() {
   echo "[$result]"
 }
 
-# Update priority_files
+# Build batch update for frontmatter arrays
+BATCH_ARGS=()
+
 if [[ ${#PRIORITY_FILES[@]} -gt 0 ]]; then
   NEW_PRIORITY_FILES=$(update_yaml_array "$EXISTING_PRIORITY_FILES" "${PRIORITY_FILES[@]}")
-  TEMP_FILE="${CONTEXT_FILE}.tmp.$$"
-  sed "s|^priority_files:.*|priority_files: $NEW_PRIORITY_FILES|" "$CONTEXT_FILE" > "$TEMP_FILE"
-  mv "$TEMP_FILE" "$CONTEXT_FILE"
+  BATCH_ARGS+=("priority_files=$NEW_PRIORITY_FILES")
 fi
 
-# Update constraints
 if [[ ${#CONSTRAINTS[@]} -gt 0 ]]; then
   NEW_CONSTRAINTS=$(update_yaml_array "$EXISTING_CONSTRAINTS" "${CONSTRAINTS[@]}")
-  TEMP_FILE="${CONTEXT_FILE}.tmp.$$"
-  sed "s|^constraints:.*|constraints: $NEW_CONSTRAINTS|" "$CONTEXT_FILE" > "$TEMP_FILE"
-  mv "$TEMP_FILE" "$CONTEXT_FILE"
+  BATCH_ARGS+=("constraints=$NEW_CONSTRAINTS")
 fi
 
-# Update success_criteria
 if [[ ${#SUCCESS_CRITERIA[@]} -gt 0 ]]; then
   NEW_SUCCESS_CRITERIA=$(update_yaml_array "$EXISTING_SUCCESS_CRITERIA" "${SUCCESS_CRITERIA[@]}")
-  TEMP_FILE="${CONTEXT_FILE}.tmp.$$"
-  sed "s|^success_criteria:.*|success_criteria: $NEW_SUCCESS_CRITERIA|" "$CONTEXT_FILE" > "$TEMP_FILE"
-  mv "$TEMP_FILE" "$CONTEXT_FILE"
+  BATCH_ARGS+=("success_criteria=$NEW_SUCCESS_CRITERIA")
+fi
+
+# Apply all frontmatter updates atomically
+if [[ ${#BATCH_ARGS[@]} -gt 0 ]]; then
+  state_batch_update "$CONTEXT_FILE" "${BATCH_ARGS[@]}"
 fi
 
 # Append notes to Notes section (not in frontmatter)

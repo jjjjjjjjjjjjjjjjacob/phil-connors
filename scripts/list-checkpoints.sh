@@ -39,26 +39,17 @@ HELP_EOF
   esac
 done
 
-# Read current state
+# Source the state parser library
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/parse-state.sh"
+
+# Read and parse state
 STATE_FILE=".agent/phil-connors/state.md"
+validate_state_exists "$STATE_FILE" || exit 1
+validate_state_active || exit 1
 
-if [[ ! -f "$STATE_FILE" ]]; then
-  echo "Error: No active phil-connors loop" >&2
-  echo "" >&2
-  echo "Start a loop first with:" >&2
-  echo "  /phil-connors \"your task\" --completion-promise \"done criteria\"" >&2
-  exit 1
-fi
-
-# Parse state frontmatter
-FRONTMATTER=$(sed -n '/^---$/,/^---$/{ /^---$/d; p; }' "$STATE_FILE")
-TASK_ID=$(echo "$FRONTMATTER" | grep '^task_id:' | sed 's/task_id: *//' | sed 's/^"\(.*\)"$/\1/')
-ACTIVE=$(echo "$FRONTMATTER" | grep '^active:' | sed 's/active: *//')
-
-if [[ "$ACTIVE" != "true" ]]; then
-  echo "Error: Phil-connors loop is not active" >&2
-  exit 1
-fi
+TASK_ID="${PC_TASK_ID:-}"
+ACTIVE="${PC_ACTIVE:-false}"
 
 # Setup paths
 TASK_DIR=".agent/phil-connors/tasks/$TASK_ID"

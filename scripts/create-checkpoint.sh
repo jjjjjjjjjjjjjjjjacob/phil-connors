@@ -69,29 +69,20 @@ if [[ -z "$DESCRIPTION" ]]; then
   exit 1
 fi
 
-# Read current state
+# Source shared libraries
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/parse-state.sh"
+source "$SCRIPT_DIR/lib/state-update.sh"
+
+# Read and validate state
 STATE_FILE=".agent/phil-connors/state.md"
+validate_state_exists "$STATE_FILE" || exit 1
+validate_state_active || exit 1
 
-if [[ ! -f "$STATE_FILE" ]]; then
-  echo "Error: No active phil-connors loop" >&2
-  echo "" >&2
-  echo "Start a loop first with:" >&2
-  echo "  /phil-connors \"your task\" --completion-promise \"done criteria\"" >&2
-  exit 1
-fi
-
-# Parse state frontmatter
-FRONTMATTER=$(sed -n '/^---$/,/^---$/{ /^---$/d; p; }' "$STATE_FILE")
-TASK_ID=$(echo "$FRONTMATTER" | grep '^task_id:' | sed 's/task_id: *//' | sed 's/^"\(.*\)"$/\1/')
-ACTIVE=$(echo "$FRONTMATTER" | grep '^active:' | sed 's/active: *//')
-ITERATION=$(echo "$FRONTMATTER" | grep '^iteration:' | sed 's/iteration: *//')
-LEARNING_COUNT=$(echo "$FRONTMATTER" | grep '^learning_count:' | sed 's/learning_count: *//' || echo "0")
-CONTINUATION_COUNT=$(echo "$FRONTMATTER" | grep '^continuation_count:' | sed 's/continuation_count: *//' || echo "0")
-
-if [[ "$ACTIVE" != "true" ]]; then
-  echo "Error: Phil-connors loop is not active" >&2
-  exit 1
-fi
+TASK_ID="${PC_TASK_ID:-}"
+ITERATION="${PC_ITERATION:-1}"
+LEARNING_COUNT="${PC_LEARNING_COUNT:-0}"
+CONTINUATION_COUNT="${PC_CONTINUATION_COUNT:-0}"
 
 # Setup directories
 TASK_DIR=".agent/phil-connors/tasks/$TASK_ID"
@@ -174,11 +165,8 @@ META_EOF
 
 # Update or create index file
 if [[ -f "$INDEX_FILE" ]]; then
-  # Append to existing index
-  # Update checkpoint_count in frontmatter
-  TEMP_FILE="${INDEX_FILE}.tmp.$$"
-  sed "s/^checkpoint_count: .*/checkpoint_count: $NEXT_ID/" "$INDEX_FILE" > "$TEMP_FILE"
-  mv "$TEMP_FILE" "$INDEX_FILE"
+  # Update checkpoint_count in frontmatter atomically
+  state_update "$INDEX_FILE" "checkpoint_count" "$NEXT_ID"
 
   # Append new row to table
   echo "| $PADDED_ID | $ITERATION | $TIMESTAMP | $DESCRIPTION |" >> "$INDEX_FILE"

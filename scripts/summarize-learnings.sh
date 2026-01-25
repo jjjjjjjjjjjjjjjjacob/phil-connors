@@ -260,9 +260,9 @@ FOOTER
 
 # Update state to record summarization
 if [[ -f "$STATE_FILE" ]]; then
-  TEMP_FILE="${STATE_FILE}.tmp.$$"
-  sed "s/^last_summarization_at: .*/last_summarization_at: \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"/" "$STATE_FILE" > "$TEMP_FILE"
-  mv "$TEMP_FILE" "$STATE_FILE"
+  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+  source "$SCRIPT_DIR/lib/state-update.sh"
+  state_update "$STATE_FILE" "last_summarization_at" "\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\""
 fi
 
 # === ARCHIVE MODE ===

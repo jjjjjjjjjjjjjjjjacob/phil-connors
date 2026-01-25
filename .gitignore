@@ -6,3 +6,6 @@
 
 # Runtime state (created by plugin during use)
 .agent/
+
+# Backup files (created by state-update.sh)
+*.bak

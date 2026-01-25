@@ -67,27 +67,18 @@ HELP_EOF
   esac
 done
 
-# Read current state
+# Source shared libraries
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/parse-state.sh"
+source "$SCRIPT_DIR/lib/state-update.sh"
+
+# Read and validate state
 STATE_FILE=".agent/phil-connors/state.md"
+validate_state_exists "$STATE_FILE" || exit 1
+validate_state_active || exit 1
 
-if [[ ! -f "$STATE_FILE" ]]; then
-  echo "Error: No active phil-connors loop" >&2
-  echo "" >&2
-  echo "Start a loop first with:" >&2
-  echo "  /phil-connors \"your task\" --completion-promise \"done criteria\"" >&2
-  exit 1
-fi
-
-# Parse state frontmatter
-FRONTMATTER=$(sed -n '/^---$/,/^---$/{ /^---$/d; p; }' "$STATE_FILE")
-TASK_ID=$(echo "$FRONTMATTER" | grep '^task_id:' | sed 's/task_id: *//' | sed 's/^"\(.*\)"$/\1/')
-ACTIVE=$(echo "$FRONTMATTER" | grep '^active:' | sed 's/active: *//')
-CURRENT_ITERATION=$(echo "$FRONTMATTER" | grep '^iteration:' | sed 's/iteration: *//')
-
-if [[ "$ACTIVE" != "true" ]]; then
-  echo "Error: Phil-connors loop is not active" >&2
-  exit 1
-fi
+TASK_ID="${PC_TASK_ID:-}"
+CURRENT_ITERATION="${PC_ITERATION:-1}"
 
 # Setup paths
 TASK_DIR=".agent/phil-connors/tasks/$TASK_ID"
@@ -201,14 +192,13 @@ if [[ -f "$CHECKPOINT_DIR/state.md" ]]; then
   # Copy checkpoint state
   cp "$CHECKPOINT_DIR/state.md" "$STATE_FILE"
 
-  # Ensure active remains true and update timestamp
-  TEMP_FILE="${STATE_FILE}.tmp.$$"
-  sed "s/^active: .*/active: true/" "$STATE_FILE" | \
-    sed "s/^iteration: .*/iteration: $CP_ITERATION/" | \
-    sed "s/^learning_count: .*/learning_count: $CP_LEARNING_COUNT/" | \
-    sed "s/^continuation_count: .*/continuation_count: $CP_CONTINUATION/" | \
-    sed "s/^last_iteration_at: .*/last_iteration_at: \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"/" > "$TEMP_FILE"
-  mv "$TEMP_FILE" "$STATE_FILE"
+  # Ensure active remains true and update timestamp atomically
+  state_batch_update "$STATE_FILE" \
+    "active=true" \
+    "iteration=$CP_ITERATION" \
+    "learning_count=$CP_LEARNING_COUNT" \
+    "continuation_count=$CP_CONTINUATION" \
+    "last_iteration_at=\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\""
 
   # Append rollback event to session history
   echo "- Rollback to checkpoint $PADDED_CP_ID ($(date +"%H:%M:%S")): restored iteration $CP_ITERATION" >> "$STATE_FILE"

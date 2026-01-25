@@ -82,14 +82,15 @@ if [[ "$SEARCH_ALL" == "true" ]]; then
 else
   # Search current task only
   STATE_FILE=".agent/phil-connors/state.md"
-  if [[ ! -f "$STATE_FILE" ]]; then
-    echo "Error: No active phil-connors loop" >&2
+  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+  source "$SCRIPT_DIR/lib/parse-state.sh"
+
+  validate_state_exists "$STATE_FILE" || {
     echo "Use --all to search all tasks, or start a loop first." >&2
     exit 1
-  fi
+  }
 
-  FRONTMATTER=$(sed -n '/^---$/,/^---$/{ /^---$/d; p; }' "$STATE_FILE")
-  TASK_ID=$(echo "$FRONTMATTER" | grep '^task_id:' | sed 's/task_id: *//' | sed 's/^"\(.*\)"$/\1/')
+  TASK_ID="${PC_TASK_ID:-}"
   LEARNED_DIR=".agent/phil-connors/tasks/$TASK_ID/learned"
 
   if [[ -d "$LEARNED_DIR" ]]; then

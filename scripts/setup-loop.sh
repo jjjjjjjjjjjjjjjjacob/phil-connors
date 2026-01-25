@@ -205,7 +205,7 @@ started_at: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 last_iteration_at: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 learning_count: 0
 last_summarization_at: null
-last_checkpoint_at: null
+session_transcript: ""
 summarization_threshold: $SUMMARIZATION_THRESHOLD
 ---
 
@@ -224,7 +224,6 @@ created_at: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 priority_files: []
 constraints: []
 success_criteria: []
-nested_context: []
 ---
 
 ## Task: $TASK_ID

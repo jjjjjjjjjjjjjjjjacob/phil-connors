@@ -113,27 +113,19 @@ HELP_EOF
   esac
 done
 
-# Read current state
+# Source shared libraries
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/parse-state.sh"
+source "$SCRIPT_DIR/lib/state-update.sh"
+
+# Read and validate state
 STATE_FILE=".agent/phil-connors/state.md"
+validate_state_exists "$STATE_FILE" || exit 1
+validate_state_active || exit 1
 
-if [[ ! -f "$STATE_FILE" ]]; then
-  echo "Error: No active phil-connors loop" >&2
-  echo "" >&2
-  echo "Start a loop first with:" >&2
-  echo "  /phil-connors \"your task\" --completion-promise \"done criteria\"" >&2
-  exit 1
-fi
-
-FRONTMATTER=$(sed -n '/^---$/,/^---$/{ /^---$/d; p; }' "$STATE_FILE")
-TASK_ID=$(echo "$FRONTMATTER" | grep '^task_id:' | sed 's/task_id: *//' | sed 's/^"\(.*\)"$/\1/')
-ITERATION=$(echo "$FRONTMATTER" | grep '^iteration:' | sed 's/iteration: *//')
-LEARNING_COUNT=$(echo "$FRONTMATTER" | grep '^learning_count:' | sed 's/learning_count: *//' || echo "0")
-ACTIVE=$(echo "$FRONTMATTER" | grep '^active:' | sed 's/active: *//')
-
-if [[ "$ACTIVE" != "true" ]]; then
-  echo "Error: Phil-connors loop is not active" >&2
-  exit 1
-fi
+TASK_ID="${PC_TASK_ID:-}"
+ITERATION="${PC_ITERATION:-1}"
+LEARNING_COUNT="${PC_LEARNING_COUNT:-0}"
 
 # Ensure learned directory exists
 LEARNED_DIR=".agent/phil-connors/tasks/$TASK_ID/learned"
@@ -342,9 +334,7 @@ $LEARNING_TEXT
 LEARNING_EOF
 
 # Update learning count in state
-TEMP_FILE="${STATE_FILE}.tmp.$$"
-sed "s/^learning_count: .*/learning_count: $NEXT_ID/" "$STATE_FILE" > "$TEMP_FILE"
-mv "$TEMP_FILE" "$STATE_FILE"
+state_update "$STATE_FILE" "learning_count" "$NEXT_ID"
 
 echo "Learning #$NEXT_ID added to task '$TASK_ID'"
 echo "  Category: $CATEGORY"

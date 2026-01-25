@@ -5,6 +5,10 @@
 
 set -euo pipefail
 
+# Source the state parser library
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/parse-state.sh"
+
 # Check for state file
 STATE_FILE=".agent/phil-connors/state.md"
 
@@ -17,21 +21,21 @@ if [[ ! -f "$STATE_FILE" ]]; then
 fi
 
 # Parse state frontmatter
-FRONTMATTER=$(sed -n '/^---$/,/^---$/{ /^---$/d; p; }' "$STATE_FILE")
+parse_state "$STATE_FILE"
 
-ACTIVE=$(echo "$FRONTMATTER" | grep '^active:' | sed 's/active: *//')
-TASK_ID=$(echo "$FRONTMATTER" | grep '^task_id:' | sed 's/task_id: *//' | sed 's/^"\(.*\)"$/\1/')
-ITERATION=$(echo "$FRONTMATTER" | grep '^iteration:' | sed 's/iteration: *//')
-MAX_ITERATIONS=$(echo "$FRONTMATTER" | grep '^max_iterations:' | sed 's/max_iterations: *//')
-COMPLETION_PROMISE=$(echo "$FRONTMATTER" | grep '^completion_promise:' | sed 's/completion_promise: *//' | sed 's/^"\(.*\)"$/\1/')
-LEARNING_COUNT=$(echo "$FRONTMATTER" | grep '^learning_count:' | sed 's/learning_count: *//' || echo "0")
-STARTED_AT=$(echo "$FRONTMATTER" | grep '^started_at:' | sed 's/started_at: *//' | sed 's/^"\(.*\)"$/\1/')
-LAST_ITERATION_AT=$(echo "$FRONTMATTER" | grep '^last_iteration_at:' | sed 's/last_iteration_at: *//' | sed 's/^"\(.*\)"$/\1/')
-CONTINUATION_COUNT=$(echo "$FRONTMATTER" | grep '^continuation_count:' | sed 's/continuation_count: *//' || echo "0")
-MAX_CONTINUATIONS=$(echo "$FRONTMATTER" | grep '^max_continuations:' | sed 's/max_continuations: *//' || echo "0")
-MIN_CONTINUATIONS=$(echo "$FRONTMATTER" | grep '^min_continuations:' | sed 's/min_continuations: *//' || echo "0")
-SUMMARIZATION_THRESHOLD=$(echo "$FRONTMATTER" | grep '^summarization_threshold:' | sed 's/summarization_threshold: *//' || echo "10")
-AUTO_CHECKPOINT=$(echo "$FRONTMATTER" | grep '^auto_checkpoint:' | sed 's/auto_checkpoint: *//' || echo "false")
+ACTIVE="${PC_ACTIVE:-false}"
+TASK_ID="${PC_TASK_ID:-}"
+ITERATION="${PC_ITERATION:-1}"
+MAX_ITERATIONS="${PC_MAX_ITERATIONS:-20}"
+COMPLETION_PROMISE="${PC_COMPLETION_PROMISE:-}"
+LEARNING_COUNT="${PC_LEARNING_COUNT:-0}"
+STARTED_AT="${PC_STARTED_AT:-}"
+LAST_ITERATION_AT="${PC_LAST_ITERATION_AT:-}"
+CONTINUATION_COUNT="${PC_CONTINUATION_COUNT:-0}"
+MAX_CONTINUATIONS="${PC_MAX_CONTINUATIONS:-0}"
+MIN_CONTINUATIONS="${PC_MIN_CONTINUATIONS:-0}"
+SUMMARIZATION_THRESHOLD="${PC_SUMMARIZATION_THRESHOLD:-10}"
+AUTO_CHECKPOINT="${PC_AUTO_CHECKPOINT:-false}"
 
 # Calculate progress
 if [[ $MAX_ITERATIONS -gt 0 ]]; then
