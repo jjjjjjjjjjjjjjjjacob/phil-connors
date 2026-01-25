@@ -31,9 +31,10 @@ Resume a previously paused phil-connors task.
    - Say "Task '{TASK_ID}' not found. Available tasks: ..."
 
 5. **If FOUND**:
-   - Set active to true:
+   - Set active to true and reset session binding:
      ```bash
      sed -i '' 's/^active: false/active: true/' .agent/phil-connors/state.md 2>/dev/null || sed -i 's/^active: false/active: true/' .agent/phil-connors/state.md
+     sed -i '' 's/^session_transcript: .*/session_transcript: "pending"/' .agent/phil-connors/state.md 2>/dev/null || sed -i 's/^session_transcript: .*/session_transcript: "pending"/' .agent/phil-connors/state.md
      ```
    - Read current state (iteration, learning_count, completion_promise)
    - Read the task context from `.agent/phil-connors/tasks/$TASK_ID/context.md`

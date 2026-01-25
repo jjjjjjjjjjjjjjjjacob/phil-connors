@@ -205,7 +205,7 @@ started_at: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 last_iteration_at: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 learning_count: 0
 last_summarization_at: null
-session_transcript: ""
+session_transcript: "pending"
 summarization_threshold: $SUMMARIZATION_THRESHOLD
 ---
 

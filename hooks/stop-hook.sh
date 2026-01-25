@@ -81,12 +81,12 @@ if [[ "$HAS_SESSION_FIELD" -eq 0 ]]; then
   echo "Phil-Connors: Legacy loop detected (no session tracking). Deactivating." >&2
   state_set_inactive "$STATE_FILE"
   exit 0
-elif [[ -z "$SESSION_TRANSCRIPT" ]]; then
-  # New loop, first iteration - store the transcript path for session isolation
+elif [[ "$SESSION_TRANSCRIPT" == "pending" ]]; then
+  # First stop hook after setup/resume - bind to this session
   state_update "$STATE_FILE" "session_transcript" "\"$TRANSCRIPT_PATH\""
-elif [[ "$SESSION_TRANSCRIPT" != "$TRANSCRIPT_PATH" ]]; then
-  # Different session - orphaned loop detected
-  echo "Phil-Connors: Orphaned loop detected (different session). Deactivating." >&2
+elif [[ -z "$SESSION_TRANSCRIPT" ]] || [[ "$SESSION_TRANSCRIPT" != "$TRANSCRIPT_PATH" ]]; then
+  # Session mismatch - deactivate, require explicit resume
+  echo "Phil-Connors: Session mismatch. Use /resume-phil-connors to continue." >&2
   state_set_inactive "$STATE_FILE"
   exit 0
 fi
