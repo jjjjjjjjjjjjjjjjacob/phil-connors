@@ -189,6 +189,9 @@ fi
 cat > ".agent/phil-connors/state.md" << STATE_EOF
 ---
 active: true
+completed: false
+completed_at: null
+completed_reason: null
 task_id: "$TASK_ID"
 iteration: 1
 max_iterations: $MAX_ITERATIONS
@@ -205,6 +208,7 @@ started_at: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 last_iteration_at: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 learning_count: 0
 last_summarization_at: null
+last_checkpoint_at: null
 session_transcript: "pending"
 summarization_threshold: $SUMMARIZATION_THRESHOLD
 ---

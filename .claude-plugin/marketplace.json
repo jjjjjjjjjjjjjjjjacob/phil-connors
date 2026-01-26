@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "phil-connors",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "description": "Iterative development loops with three-tier persistent skill hierarchy",
   "owner": {
     "name": "Jacob",
@@ -11,7 +11,7 @@
     {
       "name": "phil-connors",
       "description": "Iterative development loops with persistent context - global skills, task context, and accumulated learnings with session isolation",
-      "version": "1.5.3",
+      "version": "1.5.4",
       "source": "./",
       "category": "productivity"
     }

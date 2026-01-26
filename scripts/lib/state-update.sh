@@ -195,3 +195,22 @@ state_set_inactive() {
   local file="${1:-.agent/phil-connors/state.md}"
   state_update "$file" "active" "false"
 }
+
+# state_set_completed <file> [reason]
+# Marks a loop as permanently completed. Sets:
+#   - active: false
+#   - completed: true
+#   - completed_at: <timestamp>
+#   - completed_reason: <reason>
+#   - task_id: "" (cleared to prevent any injection)
+# Once completed, the loop will never inject again.
+state_set_completed() {
+  local file="${1:-.agent/phil-connors/state.md}"
+  local reason="${2:-promise_detected}"
+  state_batch_update "$file" \
+    "active=false" \
+    "completed=true" \
+    "completed_at=\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"" \
+    "completed_reason=\"$reason\"" \
+    "task_id=\"\""
+}

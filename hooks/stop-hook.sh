@@ -17,6 +17,31 @@ if [[ ! -f "$STATE_FILE" ]]; then
   exit 0
 fi
 
+# === FILE LOCKING (prevents concurrent hook executions) ===
+LOCK_DIR="${STATE_FILE}.lock"
+
+# Cleanup function to release lock on exit
+cleanup_lock() {
+  rmdir "$LOCK_DIR" 2>/dev/null || true
+}
+trap cleanup_lock EXIT
+
+# Try to acquire lock with timeout (mkdir is atomic)
+LOCK_TIMEOUT=3
+LOCK_ACQUIRED=false
+for ((i=0; i<LOCK_TIMEOUT; i++)); do
+  if mkdir "$LOCK_DIR" 2>/dev/null; then
+    LOCK_ACQUIRED=true
+    break
+  fi
+  sleep 1
+done
+
+if [[ "$LOCK_ACQUIRED" != "true" ]]; then
+  echo "Phil-Connors: Another hook is running, skipping" >&2
+  exit 0
+fi
+
 # Source shared libraries
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 SCRIPTS_DIR="$HOOK_DIR/../scripts"
@@ -42,12 +67,30 @@ CONTINUATION_COUNT="${PC_CONTINUATION_COUNT:-0}"
 AUTO_CHECKPOINT="${PC_AUTO_CHECKPOINT:-false}"
 AUTO_CHECKPOINT_INTERVAL="${PC_AUTO_CHECKPOINT_INTERVAL:-0}"
 LAST_SUMMARIZATION_AT="${PC_LAST_SUMMARIZATION_AT:-null}"
+COMPLETED="${PC_COMPLETED:-false}"
+COMPLETED_AT="${PC_COMPLETED_AT:-}"
 
 # Flag for continuation mode
 CONTINUING=false
 
+# === COMPLETED STATE CHECK ===
+# If already completed, exit immediately (never inject again)
+if [[ "$COMPLETED" == "true" ]]; then
+  exit 0
+fi
+
+# === TASK_ID SAFETY CHECK ===
+# If task_id is empty (cleared or corrupted), exit (defensive check)
+if [[ -z "$TASK_ID" ]]; then
+  exit 0
+fi
+
 # Validate active state
 if [[ "$ACTIVE" != "true" ]]; then
+  # Debug: log when we exit due to inactive state
+  if [[ -n "$TASK_ID" ]]; then
+    echo "Phil-Connors: Loop inactive (active=$ACTIVE), skipping task $TASK_ID" >&2
+  fi
   exit 0
 fi
 
@@ -61,7 +104,7 @@ fi
 # Check max iterations
 if [[ $MAX_ITERATIONS -gt 0 ]] && [[ $ITERATION -ge $MAX_ITERATIONS ]]; then
   echo "Phil-Connors loop: Max iterations ($MAX_ITERATIONS) reached." >&2
-  state_set_inactive "$STATE_FILE"
+  state_set_completed "$STATE_FILE" "max_iterations"
   exit 0
 fi
 
@@ -78,8 +121,8 @@ HAS_SESSION_FIELD=$(grep -c '^session_transcript:' "$STATE_FILE" 2>/dev/null || 
 
 if [[ "$HAS_SESSION_FIELD" -eq 0 ]]; then
   # Old loop created before session isolation was added - treat as orphaned
-  echo "Phil-Connors: Legacy loop detected (no session tracking). Deactivating." >&2
-  state_set_inactive "$STATE_FILE"
+  echo "Phil-Connors: Legacy loop detected (no session tracking). Completing." >&2
+  state_set_completed "$STATE_FILE" "legacy_no_session"
   exit 0
 elif [[ "$SESSION_TRANSCRIPT" == "pending" ]]; then
   # First stop hook after setup/resume - bind to this session
@@ -124,13 +167,36 @@ fi
 # === CHECK FOR COMPLETION PROMISE ===
 # Continuation only triggers AFTER a completion promise is detected
 PROMISE_DETECTED=false
+PROMISE_ATTEMPT=false
 PROMISE_TEXT=""
 
-if [[ "$COMPLETION_PROMISE" != "null" ]] && [[ -n "$COMPLETION_PROMISE" ]] && [[ -n "$LAST_OUTPUT" ]]; then
-  PROMISE_TEXT=$(echo "$LAST_OUTPUT" | perl -0777 -pe 's/.*?<promise>(.*?)<\/promise>.*/$1/s; s/^\s+|\s+$//g; s/\s+/ /g' 2>/dev/null || echo "")
-  if [[ -n "$PROMISE_TEXT" ]] && [[ "$PROMISE_TEXT" = "$COMPLETION_PROMISE" ]]; then
-    PROMISE_DETECTED=true
+if [[ -n "$LAST_OUTPUT" ]]; then
+  # Check if ANY <promise> tag exists (regardless of exact match)
+  if echo "$LAST_OUTPUT" | grep -q '<promise>.*</promise>'; then
+    PROMISE_ATTEMPT=true
+    PROMISE_TEXT=$(echo "$LAST_OUTPUT" | perl -0777 -pe 's/.*?<promise>(.*?)<\/promise>.*/$1/s; s/^\s+|\s+$//g; s/\s+/ /g' 2>/dev/null || echo "")
   fi
+
+  # Check for exact match (with normalization)
+  if [[ -n "$PROMISE_TEXT" ]] && [[ "$COMPLETION_PROMISE" != "null" ]] && [[ -n "$COMPLETION_PROMISE" ]]; then
+    # Normalize both sides for comparison
+    NORMALIZED_PROMISE=$(echo "$COMPLETION_PROMISE" | tr -s '[:space:]' ' ' | sed 's/^ *//;s/ *$//')
+    NORMALIZED_TEXT=$(echo "$PROMISE_TEXT" | tr -s '[:space:]' ' ' | sed 's/^ *//;s/ *$//')
+
+    if [[ "$NORMALIZED_TEXT" == "$NORMALIZED_PROMISE" ]]; then
+      PROMISE_DETECTED=true
+    fi
+  fi
+fi
+
+# If promise tag was attempted but didn't match exactly, still complete
+# (Prevents infinite loops on whitespace/encoding differences)
+if [[ "$PROMISE_ATTEMPT" == "true" ]] && [[ "$PROMISE_DETECTED" != "true" ]]; then
+  echo "Phil-Connors: Promise attempted but didn't exactly match. Completing anyway." >&2
+  echo "  Expected: $COMPLETION_PROMISE" >&2
+  echo "  Got: $PROMISE_TEXT" >&2
+  state_set_completed "$STATE_FILE" "promise_mismatch"
+  exit 0
 fi
 
 if [[ "$PROMISE_DETECTED" == "true" ]]; then
@@ -177,7 +243,7 @@ if [[ "$PROMISE_DETECTED" == "true" ]]; then
   else
     # No continuations left or not configured - end loop normally
     echo "Phil-Connors loop: Detected <promise>$COMPLETION_PROMISE</promise>" >&2
-    state_set_inactive "$STATE_FILE"
+    state_set_completed "$STATE_FILE" "promise_matched"
     exit 0
   fi
 fi

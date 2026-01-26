@@ -1,6 +1,6 @@
 {
   "name": "phil-connors",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "description": "Iterative development loops with three-tier persistent skill hierarchy. Global skills (immutable), task context (evolvable during iteration), and learned skills (malleable with lifecycle management and auto-summarization). Includes checkpoint/rollback, stall detection, smart learning injection, adaptive messaging, and session isolation. Never lose context between iterations.",
   "author": {
     "name": "Jacob",
