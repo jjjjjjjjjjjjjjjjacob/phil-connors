@@ -164,6 +164,22 @@ if [[ -f "$TRANSCRIPT_PATH" ]]; then
   fi
 fi
 
+# === COMPLETION NUDGE DETECTION ===
+# If the agent's output suggests task completion but lacks <promise> tags,
+# inject a strong nudge in the next iteration's system message.
+COMPLETION_NUDGE=""
+if [[ -n "$LAST_OUTPUT" ]]; then
+  if echo "$LAST_OUTPUT" | grep -qiE '(all .*(complete|done|finished|implemented)|nothing (left|remaining|more) to do|no (remaining|further|more) (tasks?|work|changes)|implementation is (fully )?(complete|done|finished)|task is (fully )?(complete|done|finished)|everything .*(completed|done|implemented|finished))'; then
+    if ! echo "$LAST_OUTPUT" | grep -q '<promise>'; then
+      COMPLETION_NUDGE="[COMPLETION DETECTED - MISSING PROMISE TAGS]
+Your previous output indicates the task may be COMPLETE, but you did NOT output the required completion signal.
+You MUST output this EXACT text to end the loop:
+<promise>$COMPLETION_PROMISE</promise>
+Output the above NOW if the task is truly complete. If not complete, continue working."
+    fi
+  fi
+fi
+
 # === CHECK FOR COMPLETION PROMISE ===
 # Continuation only triggers AFTER a completion promise is detected
 PROMISE_DETECTED=false
@@ -373,6 +389,15 @@ fi
 # === STALL DETECTION ===
 STALL_WARNING=$(detect_stall "$STATE_FILE" "$NEXT_ITERATION" "$FILES_EDITED" "$ERRORS_FOUND")
 
+# === IDLE DETECTION (Auto-stop safety net) ===
+# If 3+ consecutive iterations have 0 tool calls, the agent has nothing to do.
+IS_IDLE=$(detect_idle "$STATE_FILE" "$TOOL_CALLS")
+if [[ "$IS_IDLE" == "true" ]]; then
+  echo "Phil-Connors: Auto-completing loop (3+ iterations with 0 tool calls)" >&2
+  state_set_completed "$STATE_FILE" "idle_auto_stop"
+  exit 0
+fi
+
 # === ITERATION LIMIT WARNING ===
 LIMIT_WARNING=""
 if [[ $MAX_ITERATIONS -gt 0 ]]; then
@@ -380,6 +405,16 @@ if [[ $MAX_ITERATIONS -gt 0 ]]; then
   THRESHOLD=$(( (MAX_ITERATIONS * 80) / 100 ))
   if [[ $NEXT_ITERATION -ge $THRESHOLD ]] && [[ $REMAINING -gt 0 ]]; then
     LIMIT_WARNING="[ITERATION LIMIT] $REMAINING iterations remaining (${NEXT_ITERATION}/${MAX_ITERATIONS}). Prioritize completing the task or output your completion promise."
+  fi
+fi
+
+# === LEARNING NUDGE ===
+LEARNING_NUDGE=""
+if [[ "$LEARNING_COUNT" =~ ^[0-9]+$ ]] && [[ $NEXT_ITERATION -ge 4 ]]; then
+  EXPECTED_MIN=$(( (NEXT_ITERATION - 1) / 3 ))
+  [[ $EXPECTED_MIN -lt 1 ]] && EXPECTED_MIN=1
+  if [[ $LEARNING_COUNT -lt $EXPECTED_MIN ]]; then
+    LEARNING_NUDGE="[NO LEARNINGS RECORDED] You have $LEARNING_COUNT learnings after $((NEXT_ITERATION - 1)) iterations. Record discoveries with: /phil-connors-learn \"your insight\""
   fi
 fi
 
@@ -408,8 +443,9 @@ PREVIOUS TASK COMPLETED! Now respond to this continuation prompt:
 
 $CONTINUATION_PROMPT
 
-Work on the next task. When THAT task is complete, output:
+Work on the continuation task above. When THAT task is complete, you MUST output this EXACT text:
 <promise>$COMPLETION_PROMISE</promise>
+The loop cannot end without the <promise> tags.
 
 ================================================================================
 
@@ -421,17 +457,22 @@ if [[ $NEXT_ITERATION -le 2 ]]; then
   INSTRUCTIONS="================================================================================
 >>> HOW TO COMPLETE THIS LOOP <<<
 ================================================================================
-When the task is TRULY complete, output: <promise>$COMPLETION_PROMISE</promise>
+When the task is TRULY complete, you MUST output this EXACT text in your response:
+<promise>$COMPLETION_PROMISE</promise>
 The <promise> tags are REQUIRED. The text inside must match EXACTLY.
+The loop CANNOT detect completion without the <promise> tags.
 
-Record learnings: /phil-connors-learn \"insight\" (persists across iterations)
-Categories: -c discovery|pattern|anti-pattern|file-location|constraint|solution|blocker
-Importance: -i low|medium|high|critical
+LEARNING REQUIREMENT: After each significant discovery, run:
+  /phil-connors-learn \"your insight here\"
+  Options: -c discovery|pattern|anti-pattern|file-location|constraint|solution|blocker -i low|medium|high|critical
+Learnings persist across iterations and help future you. Record at least one learning per iteration.
 
 ================================================================================
 "
 else
-  INSTRUCTIONS="Completion: <promise>$COMPLETION_PROMISE</promise> | Learnings: /phil-connors-learn \"insight\"
+  INSTRUCTIONS="[ACTION REQUIRED] When your task is complete, you MUST output this EXACT text in your response:
+<promise>$COMPLETION_PROMISE</promise>
+The loop CANNOT end without the <promise> tags. Record insights: /phil-connors-learn \"discovery\"
 "
 fi
 
@@ -442,7 +483,7 @@ $ITER_INFO
 Task ID: $TASK_ID
 Learnings recorded: $LEARNING_COUNT
 Last iteration: tools=$TOOL_CALLS, reads=$FILES_READ, edits=$FILES_EDITED, errors=$ERRORS_FOUND
-$(if [[ -n "$STALL_WARNING" ]]; then echo ""; echo "$STALL_WARNING"; fi)$(if [[ -n "$LIMIT_WARNING" ]]; then echo ""; echo "$LIMIT_WARNING"; fi)
+$(if [[ -n "$COMPLETION_NUDGE" ]]; then echo ""; echo "$COMPLETION_NUDGE"; fi)$(if [[ -n "$LEARNING_NUDGE" ]]; then echo ""; echo "$LEARNING_NUDGE"; fi)$(if [[ -n "$STALL_WARNING" ]]; then echo ""; echo "$STALL_WARNING"; fi)$(if [[ -n "$LIMIT_WARNING" ]]; then echo ""; echo "$LIMIT_WARNING"; fi)
 ================================================================================
 TIER 1: GLOBAL SKILLS (IMMUTABLE - ALWAYS APPLY THESE)
 ================================================================================
@@ -459,13 +500,19 @@ TIER 3: ACCUMULATED LEARNINGS
 $LEARNINGS
 
 ================================================================================
-ORIGINAL PROMPT
+$(if [[ "$CONTINUING" == "true" ]]; then echo "CONTINUATION PROMPT (PRIMARY TASK)"; else echo "ORIGINAL PROMPT"; fi)
 ================================================================================
-$ORIGINAL_PROMPT"
+$(if [[ "$CONTINUING" == "true" ]]; then echo "$CONTINUATION_PROMPT"; else echo "$ORIGINAL_PROMPT"; fi)"
 
 # Output JSON to block stop and continue loop
+# During continuation, the reason (shown to user) is the continuation prompt
+REASON_PROMPT="$ORIGINAL_PROMPT"
+if [[ "$CONTINUING" == "true" ]]; then
+  REASON_PROMPT="$CONTINUATION_PROMPT"
+fi
+
 jq -n \
-  --arg prompt "$ORIGINAL_PROMPT" \
+  --arg prompt "$REASON_PROMPT" \
   --arg msg "$SYSTEM_MSG" \
   '{
     "decision": "block",

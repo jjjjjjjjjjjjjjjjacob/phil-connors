@@ -7,7 +7,7 @@ This is informational help text. Simply display this content to the user and do 
 
 # Phil-Connors Plugin Help
 
-**Version: 1.5.4**
+**Version: 1.5.5**
 
 ## What is Phil-Connors?
 

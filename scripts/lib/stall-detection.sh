@@ -101,3 +101,47 @@ detect_stall() {
     printf '%s' "$warning"
   fi
 }
+
+# detect_idle <state_file> <current_tool_calls>
+# Returns "true" via stdout if 3+ consecutive iterations had 0 tool calls.
+# This indicates the agent is doing nothing productive and the loop should auto-stop.
+detect_idle() {
+  local state_file="$1"
+  local current_tools="${2:-0}"
+
+  local history
+  history=$(grep '^- Iteration [0-9]' "$state_file" 2>/dev/null | tail -3 || echo "")
+
+  if [[ -z "$history" ]]; then
+    echo "false"
+    return
+  fi
+
+  local zero_tool_streak=0
+
+  while IFS= read -r line; do
+    local tools
+    tools=$(echo "$line" | grep -o 'tools=[0-9]*' | sed 's/tools=//' || echo "")
+    [[ -z "$tools" ]] && tools="-1"  # Skip continuation lines (no tools= field)
+
+    if [[ "$tools" -eq 0 ]]; then
+      zero_tool_streak=$((zero_tool_streak + 1))
+    elif [[ "$tools" -ge 0 ]]; then
+      zero_tool_streak=0
+    fi
+    # Lines without tools= (like continuation lines) don't break the streak
+  done <<< "$history"
+
+  # Include current iteration in streak count
+  if [[ "$current_tools" -eq 0 ]]; then
+    zero_tool_streak=$((zero_tool_streak + 1))
+  else
+    zero_tool_streak=0
+  fi
+
+  if [[ $zero_tool_streak -ge 3 ]]; then
+    echo "true"
+  else
+    echo "false"
+  fi
+}
